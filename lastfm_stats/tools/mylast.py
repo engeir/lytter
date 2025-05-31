@@ -24,10 +24,6 @@ def track_and_timestamp(track):
     return f"{out_time}\t{track.track}"
 
 
-def print_track(track):
-    print(track_and_timestamp(track))
-
-
 TRACK_SEPARATOR = " - "
 
 

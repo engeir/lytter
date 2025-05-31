@@ -8,7 +8,7 @@ description = "Install all dependencies"
 run = """
 #!/bin/bash
 uv sync
-uv export --no-dev --no-emit-project >requirements.txt
+uv export --no-hashes --no-header --no-dev --no-emit-project -o requirements.txt
 """
 alias = "i"
 

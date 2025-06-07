@@ -1,7 +1,6 @@
 """Sidebar component for the app."""
 
 import reflex as rx
-from reflex.page import get_decorated_pages
 
 
 def _sidebar_item(text: str, icon: str, href: str) -> rx.Component:
@@ -30,18 +29,19 @@ def _sidebar_item(text: str, icon: str, href: str) -> rx.Component:
 
 def _sidebar_items() -> rx.Component:
     return rx.vstack(
-        # _sidebar_item("Dashboard", "layout-dashboard", "/#"),
-        # _sidebar_item("Projects", "square-library", "/#"),
+        _sidebar_item("Home", "music", "/#"),
+        _sidebar_item("Now Playing", "disc-3", "/now-playing"),
+        # _sidebar_item("Statistics", "library", "/recently"),
         # _sidebar_item("Analytics", "bar-chart-4", "/#"),
         # _sidebar_item("Messages", "mail", "/#"),
-        *[
-            _sidebar_item(
-                text=page.get("title", page["route"].strip("/").capitalize()),
-                icon="music",
-                href=page["route"],
-            )
-            for page in get_decorated_pages()
-        ],
+        # *[
+        #     _sidebar_item(
+        #         text=page.get("title", page["route"].strip("/").capitalize()),
+        #         icon="music",
+        #         href=page["route"],
+        #     )
+        #     for page in get_decorated_pages()
+        # ],
         spacing="1",
         width="100%",
     )

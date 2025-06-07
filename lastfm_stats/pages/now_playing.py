@@ -75,6 +75,30 @@ class NowPlayingState(rx.State):
     complete = False
     playing = False
 
+    # @rx.event
+    # def check_nowplaying(self) -> None:
+    #     self.processing, self.complete = not self.processing, not self.complete
+    #     if not self.processing:
+    #         return NowPlayingState.get_nowplaying
+    #
+    # @rx.event(background=True)
+    # async def get_nowplaying(self) -> None:
+    #     """Get the currently playing audio."""
+    #     async with self:
+    #         self.processing, self.complete = True, False
+    #     response = NowPlaying().find_now_playing()
+    #     async with self:
+    #         self.now_playing = str(response)
+    #     match response:
+    #         case "I'm not listening to music atm :/":
+    #             async with self:
+    #                 self.playing = False
+    #         case _:
+    #             async with self:
+    #                 self._update_now_playing_attributes(response)
+    #     async with self:
+    #         self.processing, self.complete = False, True
+
     def get_nowplaying(self) -> None:
         """Get the currently playing audio."""
         self.processing, self.complete = True, False
@@ -92,7 +116,7 @@ class NowPlayingState(rx.State):
     @staticmethod
     def _protected_response(response: pylast.Track, method: str) -> str:
         try:
-            out = getattr(response, method)()
+            out = str(getattr(response, method)())
         except pylast.WSError:
             out = "Not found"
         return out
@@ -134,9 +158,12 @@ class NowPlayingState(rx.State):
             + '"'
         )
         self.album = response.get_album().get_name()
-        self.album_playcount = response.get_album().get_userplaycount()
+        self.album_playcount = self._protected_response(
+            response.get_album(), "get_userplaycount"
+        )
+        # self.album_playcount = response.get_album().get_userplaycount()
         self.duration = _convert_ms_to_hms(response.get_duration())
-        self.info = response.get_mbid()
+        self.info = self._protected_response(response, "get_mbid")
         self.lyrics = get_lyrics(self.artist, self.song)
         current_stats = CurrentStats()
         self.figure_history = current_stats.listening_history_db(self.artist)
@@ -187,6 +214,23 @@ def now_playing() -> rx.Component:
     list_item_color = "purple"
     return rx.vstack(
         rx.heading("Now Playing", font_size="3em"),
+        # rx.button(
+        #     rx.cond(
+        #         ~NowPlayingState.processing,
+        #         "What are you listening to, Eirik?",
+        #         "Loading... Click to stop looking",
+        #     ),
+        #     on_click=NowPlayingState.check_nowplaying,
+        #     width="100%",
+        # ),
+        # rx.cond(
+        #     (NowPlayingState.processing & ~NowPlayingState.complete),
+        #     rx.button(
+        #         "",
+        #         loading=NowPlayingState.processing,
+        #         width="100%",
+        #     ),
+        # ),
         rx.button(
             "What are you listening to, Eirik?",
             on_click=NowPlayingState.get_nowplaying,

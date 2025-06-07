@@ -152,3 +152,4 @@ var/
 venv.bak/
 venv/
 wheels/
+requirements.txt

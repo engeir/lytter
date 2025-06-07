@@ -48,8 +48,6 @@ def menu_button() -> rx.Component:
     -------
         The menu button component.
     """
-    from reflex.page import get_decorated_pages
-
     return rx.box(
         rc.menu(
             # rx.button(
@@ -65,14 +63,18 @@ def menu_button() -> rx.Component:
             ),
             rc.menu_list(
                 *[
-                    rc.menu_item(
-                        rx.link(
-                            page["title"],
-                            href=page["route"],
-                            width="100%",
-                        )
-                    )
-                    for page in get_decorated_pages()
+                    rc.menu_item("Dashboard", "layout-dashboard", "/#"),
+                    rc.menu_item("Projects", "square-library", "/#"),
+                    rc.menu_item("Analytics", "bar-chart-4", "/#"),
+                    rc.menu_item("Messages", "mail", "/#"),
+                    # rc.menu_item(
+                    #     rx.link(
+                    #         page["title"],
+                    #         href=page["route"],
+                    #         width="100%",
+                    #     )
+                    # )
+                    # for page in get_decorated_pages()
                 ],
                 rc.menu_divider(),
                 rc.menu_item(

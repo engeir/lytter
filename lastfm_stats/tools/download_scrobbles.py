@@ -25,18 +25,30 @@ class GetScrobbles:
 
     def __init__(self):
         self.pause_duration = 0.2
-        self.existing_items = self._get_items()
+        # self.existing_items = self._get_items()
         self.method = "recenttracks"
 
-    def _get_items(self) -> set:
-        try:
-            items = set(self.ds["timestamp"].tolist())
-        except KeyError:
-            items = set()
-        return items
+    # def _get_items(self) -> set:
+    #     try:
+    #         items = set(self.ds["timestamp"].tolist())
+    #     except KeyError:
+    #         items = set()
+    #     return items
+
+    def save(self) -> None:
+        self.get_scrobbles()
+
+    def full_update(self) -> None:
+        self.get_scrobbles(full=True)
 
     def get_scrobbles(
-        self, limit: int = 200, extended: int = 0, page: int = 1, pages: int = 0
+        self,
+        limit: int = 200,
+        extended: int = 0,
+        page: int = 1,
+        pages: int = 0,
+        *,
+        full: bool = False,
     ) -> None:
         """Get scrobbles via the lastfm API.
 
@@ -51,6 +63,8 @@ class GetScrobbles:
         pages : int
             The number of pages of results to retrieve. if 0, get as many as api can
             return.
+        full : bool
+            Full update and rewrite of the database.
         """
         # initialize url and lists to contain response fields
         url = "https://ws.audioscrobbler.com/2.0/?method=user.get{}&user={}&api_key={}&limit={}&extended={}&page={}&format=json"
@@ -96,7 +110,7 @@ class GetScrobbles:
                         session.commit()
                     except sqlalchemy.exc.IntegrityError:
                         session.rollback()
-                        found_existing = True
+                        found_existing = True and not full
             if found_existing:
                 break
 
@@ -106,8 +120,8 @@ class GetScrobbles:
 def main() -> None:
     """Run the downloader."""
     down = GetScrobbles()
-    print(down.existing_items)
-    down.get_scrobbles()
+    # print(down.existing_items)
+    down.get_scrobbles(full=True)
 
 
 if __name__ == "__main__":

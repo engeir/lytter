@@ -1,3 +1,5 @@
+from collections.abc import Generator
+
 """The now-playing page."""
 
 import plotly.express as px
@@ -99,7 +101,7 @@ class NowPlayingState(rx.State):
     #     async with self:
     #         self.processing, self.complete = False, True
 
-    def get_nowplaying(self) -> None:
+    def get_nowplaying(self) -> Generator:
         """Get the currently playing audio."""
         self.processing, self.complete = True, False
         yield

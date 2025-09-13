@@ -7,8 +7,6 @@ anyio==4.9.0
     #   httpx
     #   starlette
     #   watchfiles
-async-timeout==5.0.1 ; python_full_version < '3.11.3'
-    # via redis
 beautifulsoup4==4.13.4
     # via lyricsgenius
 bidict==0.23.1

@@ -517,43 +517,102 @@ async def listening_timeline():
     return fig_dict
 
 
-@app.get("/charts/top-artists-bar")
-async def top_artists_bar():
-    """Generate top artists bar chart."""
+@app.get("/recent-stats")
+async def recent_stats():
+    """Get top artists, albums, and songs from past week and month."""
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Top 5 artists from past week
     cursor.execute("""
         SELECT artist, COUNT(*) as plays
         FROM musiclibrary
+        WHERE timestamp >= strftime('%s', 'now', '-7 days')
         GROUP BY artist
         ORDER BY plays DESC
-        LIMIT 20
+        LIMIT 5
     """)
-    result = cursor.fetchall()
+    week_artists = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
+
+    # Top 5 albums from past week
+    cursor.execute("""
+        SELECT artist, album, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE timestamp >= strftime('%s', 'now', '-7 days')
+            AND album != ''
+        GROUP BY artist, album
+        ORDER BY plays DESC
+        LIMIT 5
+    """)
+    week_albums = [
+        {"artist": row[0], "album": row[1], "plays": row[2]}
+        for row in cursor.fetchall()
+    ]
+
+    # Top 5 songs from past week
+    cursor.execute("""
+        SELECT artist, track, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE timestamp >= strftime('%s', 'now', '-7 days')
+        GROUP BY artist, track
+        ORDER BY plays DESC
+        LIMIT 5
+    """)
+    week_songs = [
+        {"artist": row[0], "track": row[1], "plays": row[2]}
+        for row in cursor.fetchall()
+    ]
+
+    # Top 5 artists from past month
+    cursor.execute("""
+        SELECT artist, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE timestamp >= strftime('%s', 'now', '-30 days')
+        GROUP BY artist
+        ORDER BY plays DESC
+        LIMIT 5
+    """)
+    month_artists = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
+
+    # Top 5 albums from past month
+    cursor.execute("""
+        SELECT artist, album, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE timestamp >= strftime('%s', 'now', '-30 days')
+            AND album != ''
+        GROUP BY artist, album
+        ORDER BY plays DESC
+        LIMIT 5
+    """)
+    month_albums = [
+        {"artist": row[0], "album": row[1], "plays": row[2]}
+        for row in cursor.fetchall()
+    ]
+
+    # Top 5 songs from past month
+    cursor.execute("""
+        SELECT artist, track, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE timestamp >= strftime('%s', 'now', '-30 days')
+        GROUP BY artist, track
+        ORDER BY plays DESC
+        LIMIT 5
+    """)
+    month_songs = [
+        {"artist": row[0], "track": row[1], "plays": row[2]}
+        for row in cursor.fetchall()
+    ]
+
     conn.close()
 
-    df = pd.DataFrame(result, columns=["artist", "plays"])
-
-    fig = px.bar(df, x="plays", y="artist", orientation="h", title="Top 20 Artists")
-    fig.update_layout(
-        yaxis=dict(
-            categoryorder="total ascending", gridcolor="#30363d", color="#f0f6fc"
-        ),
-        xaxis_title="Total Plays",
-        yaxis_title="Artist",
-        paper_bgcolor="#161b22",
-        plot_bgcolor="#161b22",
-        font=dict(color="#f0f6fc"),
-        xaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
-    )
-
-    # Convert to plain dict without binary encoding
-    fig_dict = fig.to_dict()
-    # Force values to be plain lists
-    fig_dict["data"][0]["x"] = df["plays"].tolist()
-    fig_dict["data"][0]["y"] = df["artist"].tolist()
-
-    return fig_dict
+    return {
+        "week_artists": week_artists,
+        "week_albums": week_albums,
+        "week_songs": week_songs,
+        "month_artists": month_artists,
+        "month_albums": month_albums,
+        "month_songs": month_songs,
+    }
 
 
 # Removed admin panel and web-based updates

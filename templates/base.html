@@ -78,6 +78,23 @@
         #timeline-chart, #artists-chart {
             min-height: 400px;
         }
+        /* Make artists chart scrollable */
+        #artists-chart {
+            position: relative;
+        }
+        #artists-chart::-webkit-scrollbar {
+            width: 8px;
+        }
+        #artists-chart::-webkit-scrollbar-track {
+            background: #161b22;
+        }
+        #artists-chart::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+        #artists-chart::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
     </style>
 </head>
 <body>

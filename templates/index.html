@@ -78,10 +78,10 @@
     <div class="col-lg-6 mb-4">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">Top Artists</h5>
-                <div id="artists-chart" style="height: 400px;">
-                    <div class="d-flex justify-content-center align-items-center h-100">
-                        <p class="text-muted">Loading chart...</p>
+                <h5 class="card-title">Recent Favorites</h5>
+                <div id="recent-stats">
+                    <div class="d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                        <p class="text-muted">Loading...</p>
                     </div>
                 </div>
             </div>
@@ -132,23 +132,57 @@ if (typeof Plotly === 'undefined') {
             document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Error: ' + error.message + '</p>';
         });
 
-    // Load top artists bar chart
-    fetch('/charts/top-artists-bar')
+    // Load recent stats
+    fetch('/recent-stats')
         .then(response => {
-            console.log('Artists chart response status:', response.status);
+            console.log('Recent stats response status:', response.status);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
-            console.log('Artists chart data received, plotting...');
-            Plotly.newPlot('artists-chart', data.data, data.layout, {responsive: true});
-            console.log('Artists chart plotted successfully');
+            console.log('Recent stats data received');
+            const html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="mb-3" style="color: #58a6ff;">Past Week</h6>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Artists</h6>
+                        <ol class="mb-3 ps-3" style="font-size: 0.9rem; color: #f0f6fc;">
+                            ${data.week_artists.map(a => `<li>${a.artist} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        </ol>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Albums</h6>
+                        <ol class="mb-3 ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
+                            ${data.week_albums.map(a => `<li>${a.artist} - ${a.album} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        </ol>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Songs</h6>
+                        <ol class="ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
+                            ${data.week_songs.map(s => `<li>${s.artist} - ${s.track} <span style="color: #8b949e;">(${s.plays})</span></li>`).join('')}
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3" style="color: #58a6ff;">Past Month</h6>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Artists</h6>
+                        <ol class="mb-3 ps-3" style="font-size: 0.9rem; color: #f0f6fc;">
+                            ${data.month_artists.map(a => `<li>${a.artist} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        </ol>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Albums</h6>
+                        <ol class="mb-3 ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
+                            ${data.month_albums.map(a => `<li>${a.artist} - ${a.album} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        </ol>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Songs</h6>
+                        <ol class="ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
+                            ${data.month_songs.map(s => `<li>${s.artist} - ${s.track} <span style="color: #8b949e;">(${s.plays})</span></li>`).join('')}
+                        </ol>
+                    </div>
+                </div>
+            `;
+            document.getElementById('recent-stats').innerHTML = html;
+            console.log('Recent stats populated');
         })
         .catch(error => {
-            console.error('Error loading artists chart:', error);
-            document.getElementById('artists-chart').innerHTML = '<p class="text-muted">Error: ' + error.message + '</p>';
+            console.error('Error loading recent stats:', error);
+            document.getElementById('recent-stats').innerHTML = '<p class="text-muted">Error: ' + error.message + '</p>';
         });
 }
 

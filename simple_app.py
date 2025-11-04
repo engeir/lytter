@@ -458,13 +458,52 @@ async def listening_timeline():
     fig = px.line(
         df, x="date", y="plays", title="Daily Listening Activity (Last 365 Days)"
     )
+
+    # Calculate initial view range (last 30 days)
+    if len(df) > 0:
+        max_date = df["date"].max()
+        min_date = df["date"].min()
+        initial_end = max_date
+        initial_start = max_date - pd.Timedelta(days=30)
+        # Make sure initial_start is not before the min_date
+        initial_start = max(initial_start, min_date)
+    else:
+        initial_start = initial_end = None
+
     fig.update_layout(
         xaxis_title="Date",
         yaxis_title="Number of Scrobbles",
         paper_bgcolor="#161b22",
         plot_bgcolor="#161b22",
         font=dict(color="#f0f6fc"),
-        xaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
+        xaxis=dict(
+            gridcolor="#30363d",
+            color="#f0f6fc",
+            range=[initial_start, initial_end] if initial_start else None,
+            rangeslider=dict(
+                visible=True,
+                bgcolor="#0d1117",
+                bordercolor="#30363d",
+                borderwidth=1,
+            ),
+            rangeselector=dict(
+                buttons=list(
+                    [
+                        dict(count=7, label="1w", step="day", stepmode="backward"),
+                        dict(count=14, label="2w", step="day", stepmode="backward"),
+                        dict(count=1, label="1m", step="month", stepmode="backward"),
+                        dict(count=3, label="3m", step="month", stepmode="backward"),
+                        dict(count=6, label="6m", step="month", stepmode="backward"),
+                        dict(step="all", label="All"),
+                    ]
+                ),
+                bgcolor="#161b22",
+                activecolor="#238636",
+                bordercolor="#30363d",
+                borderwidth=1,
+                font=dict(color="#f0f6fc"),
+            ),
+        ),
         yaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
         hovermode="x unified",
     )

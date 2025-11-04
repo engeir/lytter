@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Last.fm Stats{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Last.fm Statistics Dashboard</h1>
+    </div>
+</div>
+
+{% if current_track %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">🎧 Currently Playing</h5>
+                <h6 class="card-subtitle mb-2 text-muted">{{ current_track.artist }}</h6>
+                <p class="card-text">
+                    <strong>{{ current_track.title }}</strong><br>
+                    <small>from {{ current_track.album }}</small>
+                </p>
+                <a href="/artist/{{ current_track.artist }}" class="btn btn-primary btn-sm">View Artist Stats</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Total Scrobbles</h5>
+                <h3 class="text-primary">{{ "{:,}".format(total_scrobbles) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unique Artists</h5>
+                <h3 class="text-primary">{{ "{:,}".format(unique_artists) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unique Tracks</h5>
+                <h3 class="text-primary">{{ "{:,}".format(unique_tracks) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unique Albums</h5>
+                <h3 class="text-primary">{{ "{:,}".format(unique_albums) }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listening Timeline</h5>
+                <div id="timeline-chart" style="height: 400px;">
+                    <div class="d-flex justify-content-center align-items-center h-100">
+                        <p class="text-muted">Loading chart...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Top Artists</h5>
+                <div id="artists-chart" style="height: 400px;">
+                    <div class="d-flex justify-content-center align-items-center h-100">
+                        <p class="text-muted">Loading chart...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Top Artists</h5>
+                <div id="top-artists-list">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Check if Plotly is loaded
+if (typeof Plotly === 'undefined') {
+    console.error('Plotly is not loaded!');
+    document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Plotly.js failed to load</p>';
+    document.getElementById('artists-chart').innerHTML = '<p class="text-muted">Plotly.js failed to load</p>';
+} else {
+    console.log('Plotly is loaded, version:', Plotly.version);
+
+    // Load listening timeline chart
+    fetch('/charts/listening-timeline')
+        .then(response => {
+            console.log('Timeline response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Timeline data received, plotting...');
+            Plotly.newPlot('timeline-chart', data.data, data.layout, {responsive: true});
+            console.log('Timeline chart plotted successfully');
+        })
+        .catch(error => {
+            console.error('Error loading timeline chart:', error);
+            document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Error: ' + error.message + '</p>';
+        });
+
+    // Load top artists bar chart
+    fetch('/charts/top-artists-bar')
+        .then(response => {
+            console.log('Artists chart response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Artists chart data received, plotting...');
+            Plotly.newPlot('artists-chart', data.data, data.layout, {responsive: true});
+            console.log('Artists chart plotted successfully');
+        })
+        .catch(error => {
+            console.error('Error loading artists chart:', error);
+            document.getElementById('artists-chart').innerHTML = '<p class="text-muted">Error: ' + error.message + '</p>';
+        });
+}
+
+// Load top artists list (doesn't need Plotly)
+fetch('/top-artists')
+    .then(response => {
+        console.log('Top artists list response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Top artists data received:', data.artists.length, 'artists');
+        const list = data.artists.map(artist =>
+            `<div class="d-flex justify-content-between border-bottom py-2">
+                <a href="/artist/${encodeURIComponent(artist.artist)}" class="text-decoration-none">${artist.artist}</a>
+                <span class="badge bg-primary">${artist.plays}</span>
+            </div>`
+        ).join('');
+        document.getElementById('top-artists-list').innerHTML = list;
+        console.log('Top artists list populated');
+    })
+    .catch(error => {
+        console.error('Error loading top artists:', error);
+        document.getElementById('top-artists-list').innerHTML = '<p class="text-muted">Error loading artists</p>';
+    });
+</script>
+{% endblock %}

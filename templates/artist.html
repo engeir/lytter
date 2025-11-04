@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}{{ artist_name }} - Last.fm Stats{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item active">{{ artist_name }}</li>
+            </ol>
+        </nav>
+        <h1 class="mb-4">{{ artist_name }}</h1>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Total Plays</h5>
+                <h3 class="text-primary">{{ "{:,}".format(total_plays) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unique Tracks</h5>
+                <h3 class="text-primary">{{ unique_tracks }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unique Albums</h5>
+                <h3 class="text-primary">{{ unique_albums }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listening History</h5>
+                <div id="history-chart"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Top Songs</h5>
+                <div id="songs-chart"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load history chart
+const historyData = {{ history_chart | safe }};
+Plotly.newPlot('history-chart', historyData.data, historyData.layout, {responsive: true});
+
+// Load songs chart
+const songsData = {{ songs_chart | safe }};
+Plotly.newPlot('songs-chart', songsData.data, songsData.layout, {responsive: true});
+</script>
+{% endblock %}

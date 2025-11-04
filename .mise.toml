@@ -1,3 +1,4 @@
+# Development tasks
 [tasks.run]
 description = "Run the reflex app locally"
 run = "uv run reflex run"
@@ -12,14 +13,65 @@ uv export --no-hashes --no-header --no-dev --no-emit-project -o requirements.txt
 """
 alias = "i"
 
-[tasks.build]
-description = "Build the docker container"
+# Docker tasks (optimized for fast builds)
+[env]
+DOCKER_BUILDKIT = "1"  # Enable BuildKit for better caching
+
+[tasks."docker:build"]
+description = "Build production Docker image (takes ~10 min first time)"
+run = "docker compose build"
+alias = "db"
+depends = ["install"]
+
+[tasks."docker:build-direct"]
+description = "Build image directly (for pushing to registry)"
 run = "docker build -t ghcr.io/engeir/lastfm-stats:latest ."
+depends = ["install"]
+
+[tasks."docker:build-clean"]
+description = "Clean build without cache (for troubleshooting)"
+run = "docker compose build --no-cache"
+depends = ["install"]
+
+[tasks."docker:up"]
+description = "Start all services with docker-compose"
+run = "docker compose up -d"
+alias = "du"
+
+[tasks."docker:up-build"]
+description = "Build and start all services"
+run = "docker compose up --build -d"
+alias = "dub"
+depends = ["install"]
+
+[tasks."docker:down"]
+description = "Stop all docker-compose services"
+run = "docker compose down"
+alias = "dd"
+
+[tasks."docker:logs"]
+description = "Follow logs from the app"
+run = "docker compose logs -f app"
+alias = "dl"
+
+[tasks."docker:push"]
+description = "Push image to GitHub Container Registry"
+run = "docker push ghcr.io/engeir/lastfm-stats:latest"
+alias = "dp"
+
+[tasks."docker:restart"]
+description = "Restart all services"
+run = "docker compose restart"
+
+# Legacy single-container tasks (kept for backwards compatibility)
+[tasks.build]
+description = "Build single-container image (legacy)"
+run = "docker build -t ghcr.io/engeir/lastfm-stats:latest -f Dockerfile ."
 alias = "b"
 depends = ["install"]
 
 [tasks.start]
-description = "Start the docker container"
+description = "Start single-container (legacy)"
 run = "docker run --env-file .env -it --rm -p 3000:3000 -p 8000:8000 --detach --name lastfm-stats ghcr.io/engeir/lastfm-stats:latest"
 alias = "s"
 

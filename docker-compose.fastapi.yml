@@ -9,7 +9,7 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
-      - ./reflex.db:/app/reflex.db
+      - ./music.db:/app/music.db
     environment:
       - API_KEY=${API_KEY}
       - API_SECRET=${API_SECRET}

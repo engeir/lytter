@@ -53,7 +53,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Database helper functions
 def get_db_connection():
     """Get SQLite database connection."""
-    return sqlite3.connect("reflex.db")
+    return sqlite3.connect("music.db")
 
 
 def init_db():

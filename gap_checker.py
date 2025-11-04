@@ -16,7 +16,7 @@ USER_NAME = os.environ.get("USER_NAME")
 
 def get_db_connection():
     """Get database connection."""
-    return sqlite3.connect("reflex.db")
+    return sqlite3.connect("music.db")
 
 
 def find_timestamp_gaps(hours_back=24, gap_threshold=3600):
@@ -63,7 +63,7 @@ def find_timestamp_gaps(hours_back=24, gap_threshold=3600):
 
 def fetch_scrobbles_in_range(from_timestamp, to_timestamp):
     """Fetch scrobbles from Last.fm API in a specific time range."""
-    url = "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={}&api_key={}&limit=200&from={}&to={}&page={}&format=json"
+e   url  "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={}&api_key={}&limit=200&from={}&to={}&page={}&format=json"
 
     all_scrobbles = []
     page = 1

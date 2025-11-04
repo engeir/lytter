@@ -84,7 +84,7 @@ docker build -f Dockerfile.fastapi -t lastfm-stats-fastapi .
 docker run -d \
   --name lastfm-stats \
   -p 8000:8000 \
-  -v $(pwd)/reflex.db:/app/reflex.db \
+  -v $(pwd)/music.db:/app/music.db \
   --env-file .env \
   lastfm-stats-fastapi
 ```
@@ -289,7 +289,7 @@ You'll never lose scrobbles and the system mostly runs fast incremental updates.
 
 ## Migrating from Reflex
 
-If you have an existing `reflex.db` from the Reflex version, it should work directly with this FastAPI version since we use the same database schema.
+If you have an existing `music.db` from the Reflex version, it should work directly with this FastAPI version since we use the same database schema.
 
 ## Development
 
@@ -320,7 +320,7 @@ The application structure is straightforward:
 If you encounter database issues, you can reset it:
 
 ```bash
-rm reflex.db
+rm music.db
 python -c "from simple_app import init_db; init_db()"
 ```
 

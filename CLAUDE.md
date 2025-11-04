@@ -159,7 +159,7 @@ See `docker-build-guide.md` for detailed information.
 **Database**:
 - Uses SQLModel (Reflex's `rx.Model`) for ORM
 - Primary model: `MusicLibrary` (in `download_scrobbles.py`) stores artist, album, track info with MusicBrainz IDs and unique timestamps
-- SQLite database at `reflex.db`
+- SQLite database at `music.db`
 - Alembic for migrations (config in `alembic.ini`, migrations in `alembic/versions/`)
 
 ### State Management

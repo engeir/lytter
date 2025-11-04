@@ -382,9 +382,6 @@ async def artist_stats(request: Request, artist_name: str):
     # Get listening history (already returns plain dict)
     history_json = json.dumps(stats.listening_history_db(artist_name))
 
-    # Get top songs (already returns plain dict)
-    songs_json = json.dumps(stats.top_songs(artist_name))
-
     # Get basic artist stats
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -415,7 +412,6 @@ async def artist_stats(request: Request, artist_name: str):
             "unique_tracks": unique_tracks,
             "unique_albums": unique_albums,
             "history_chart": history_json,
-            "songs_chart": songs_json,
         },
     )
 
@@ -613,6 +609,52 @@ async def recent_stats():
         "month_albums": month_albums,
         "month_songs": month_songs,
     }
+
+
+@app.get("/artist-top-songs")
+async def artist_top_songs(artist: str):
+    """Get top songs for a specific artist."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT track, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE artist = ?
+        GROUP BY track
+        ORDER BY plays DESC
+        LIMIT 100
+    """,
+        (artist,),
+    )
+    result = cursor.fetchall()
+    conn.close()
+
+    songs = [{"track": row[0], "plays": row[1]} for row in result]
+    return {"songs": songs}
+
+
+@app.get("/artist-top-albums")
+async def artist_top_albums(artist: str):
+    """Get top albums for a specific artist."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT album, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE artist = ? AND album != ''
+        GROUP BY album
+        ORDER BY plays DESC
+        LIMIT 100
+    """,
+        (artist,),
+    )
+    result = cursor.fetchall()
+    conn.close()
+
+    albums = [{"album": row[0], "plays": row[1]} for row in result]
+    return {"albums": albums}
 
 
 # Removed admin panel and web-based updates

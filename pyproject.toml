@@ -163,7 +163,6 @@ xarray = "xr"
 [tool.ruff.lint.isort]
 order-by-type = true
 case-sensitive = true
-known-local-folder = ["music_stats"]
 
 [tool.lint.isort]
 multi_line_output = 3

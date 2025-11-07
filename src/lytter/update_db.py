@@ -4,11 +4,11 @@
 import argparse
 import sys
 
-from simple_app import GetScrobbles, init_db
+from lytter.app import GetScrobbles, init_db
 
 
 def main():
-    """Main function for database updates."""
+    """Update the Last.fm scrobbles database."""
     parser = argparse.ArgumentParser(description="Update Last.fm scrobbles database")
     parser.add_argument(
         "--full",

@@ -5,7 +5,7 @@ import logging
 import sys
 from pathlib import Path
 
-from simple_app import GetScrobbles, init_db
+from lytter.app import GetScrobbles, init_db
 
 # Setup logging
 log_file = Path(__file__).parent / "lastfm_updates.log"

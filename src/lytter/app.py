@@ -5,17 +5,18 @@ import json
 import os
 import sqlite3
 from collections import Counter, OrderedDict
+from pathlib import Path
 
 import pylast
 import requests
+import uvicorn
 from dotenv import load_dotenv
 
 # Note: These imports may show errors in the editor but will work when dependencies are installed
 try:
     import pandas as pd
     import plotly.express as px
-    import plotly.utils
-    from fastapi import FastAPI, Form, HTTPException, Request
+    from fastapi import FastAPI, Request
     from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
     from fastapi.templating import Jinja2Templates
@@ -25,15 +26,18 @@ except ImportError as e:
 
 load_dotenv()
 
+# Get package directory for templates and static files
+_PKG_DIR = Path(__file__).parent
+
 # Configuration
-API_KEY = os.environ.get("API_KEY")
-API_SECRET = os.environ.get("API_SECRET")
-USER_NAME = os.environ.get("USER_NAME")
-PASSWORD = os.environ.get("PASSWORD")
-PASSWORD_HASH = pylast.md5(PASSWORD) if PASSWORD else None
+API_KEY = os.environ.get("API_KEY", "")
+API_SECRET = os.environ.get("API_SECRET", "")
+USER_NAME = os.environ.get("USER_NAME", "")
+PASSWORD = os.environ.get("PASSWORD", "")
+PASSWORD_HASH = pylast.md5(PASSWORD) if PASSWORD else ""
 UPDATE_PASSWORD = os.environ.get("UPDATE_PASSWORD")
 
-# pylast network
+# pylast network (will fail at runtime if env vars not set)
 network = pylast.LastFMNetwork(
     api_key=API_KEY,
     api_secret=API_SECRET,
@@ -46,8 +50,11 @@ app = FastAPI(
 )
 
 # Setup templates and static files
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory=str(_PKG_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="static")
+
+# Constants
+CONSECUTIVE_SCROBBLES_THRESHOLD = 50
 
 
 # Database helper functions
@@ -129,8 +136,6 @@ class GetScrobbles:
             print(f"Latest timestamp in database: {latest_timestamp}")
             if latest_timestamp > 0:
                 # Convert timestamp to readable date for user info
-                import datetime
-
                 latest_date = datetime.datetime.fromtimestamp(latest_timestamp)
                 print(f"Last scrobble: {latest_date}")
 
@@ -195,7 +200,7 @@ class GetScrobbles:
                     consecutive_old_scrobbles += 1
                     # Only stop after many consecutive existing scrobbles AND we're past our latest timestamp
                     if (
-                        consecutive_old_scrobbles >= 50
+                        consecutive_old_scrobbles >= CONSECUTIVE_SCROBBLES_THRESHOLD
                         and not full
                         and latest_timestamp > 0
                         and scrobble_timestamp <= latest_timestamp
@@ -326,7 +331,7 @@ class CurrentStats:
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    """Main dashboard page."""
+    """Display main dashboard page."""
     # Get basic stats
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -667,7 +672,10 @@ async def stats_page(request: Request):
     return templates.TemplateResponse("stats.html", {"request": request})
 
 
-if __name__ == "__main__":
-    import uvicorn
-
+def main():
+    """Run the application server."""
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    main()

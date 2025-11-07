@@ -10,21 +10,17 @@ RUN apt-get update && apt-get install -y \
     && curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Add uv to PATH
-ENV PATH="/root/.cargo/bin:$PATH"
+ENV PATH="/root/.local/bin:$PATH"
 
-# Copy pyproject.toml and install Python dependencies
-COPY pyproject.toml uv.lock ./
+# Copy pyproject.toml, README, and package structure
+COPY pyproject.toml uv.lock README.md ./
+COPY src/ src/
 RUN uv sync --frozen
-
-# Copy application files
-COPY simple_app.py .
-COPY templates/ templates/
-COPY static/ static/
 
 # Create directory for database
 RUN mkdir -p /app/data
 
 EXPOSE 8000
 
-# Run the application
-CMD ["uv", "run", "uvicorn", "simple_app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application with healthcheck-friendly settings
+CMD ["uv", "run", "uvicorn", "lytter.app:app", "--host", "0.0.0.0", "--port", "8000"]

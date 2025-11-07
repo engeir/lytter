@@ -4,7 +4,10 @@
 import datetime
 import sqlite3
 
-from simple_app import get_db_connection
+from lytter.app import get_db_connection
+
+# Constants
+SECONDS_PER_HOUR = 3600
 
 
 def main():
@@ -46,13 +49,12 @@ def main():
             print(f"Latest scrobble: {latest_date}")
 
             # Calculate how old the latest scrobble is
-            now = datetime.datetime.now()
-            time_diff = now - latest_date
+            time_diff = datetime.datetime.now() - latest_date
 
             if time_diff.days > 0:
                 print(f"⚠️  Database is {time_diff.days} days behind")
-            elif time_diff.seconds > 3600:
-                hours = time_diff.seconds // 3600
+            elif time_diff.seconds > SECONDS_PER_HOUR:
+                hours = time_diff.seconds // SECONDS_PER_HOUR
                 print(f"⚠️  Database is {hours} hours behind")
             else:
                 print("✅ Database is up to date")

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Last.fm statistics web application built with Reflex (Python web framework). It fetches and displays listening history, now-playing information, and various music statistics from Last.fm API. The app uses SQLModel for database management and stores scrobbles (listening history) in a SQLite database.
+**Lytter** is a Last.fm statistics web application built with FastAPI. It fetches and displays listening history, now-playing information, and various music statistics from Last.fm API. The app uses SQLite for database management and stores scrobbles (listening history) with incremental updates.
 
 ## Essential Commands
 
@@ -14,60 +14,38 @@ This project uses [mise](https://mise.jdx.dev/) as a task runner. Use `mise task
 ```bash
 # Quick commands via mise (recommended)
 mise run r              # Run the development server (alias for 'run')
-mise run install        # Install/update all dependencies (alias: i)
+mise run i              # Install/update all dependencies (alias: 'install')
 
 # Or use uv directly
-uv run reflex run       # Run the development server
-uv run reflex init      # Initialize/reinitialize the app (after config changes)
-uv run reflex export    # Export the app for production
-```
-
-### Database Management
-```bash
-# Create a new Alembic migration
-uv run alembic revision --autogenerate -m "description"
-
-# Apply migrations
-uv run alembic upgrade head
-
-# Rollback migration
-uv run alembic downgrade -1
+uv run lytter           # Run the web application
+uv run lytter-update    # Update scrobbles database
+uv run lytter-status    # Check database status
 ```
 
 ### Code Quality
 ```bash
 # Run type checking
-uv run mypy lastfm_stats
+uv run mypy src/
 
 # Lint and format with ruff
-uv run ruff check lastfm_stats
-uv run ruff format lastfm_stats
+uv run ruff check src/
+uv run ruff format src/
 
 # Run all pre-commit hooks
 uv run pre-commit run --all-files
 ```
 
-### Docker (Production-Ready Single-Container Setup)
-
-The app uses a **production-ready single-container** approach:
-- **Single image** with Redis, backend, and pre-built frontend
-- **Easy deployment** - just push and pull one image
-- **Fast startup** - frontend pre-built during image build (~5 sec startup)
-- **Ready for VPS** - works with docker run or docker-compose
+### Docker
 
 **Quick commands via mise (recommended):**
 ```bash
-mise run db             # Build image (takes ~10 min first time)
-mise run dub            # Build and start - alias for docker:up-build
-mise run du             # Start container - alias for docker:up
-mise run dd             # Stop container - alias for docker:down
-mise run dl             # Follow logs - alias for docker:logs
-mise run dp             # Push to registry - alias for docker:push
-
-# Other tasks
-mise run docker:build-direct    # Build with proper tag for pushing
-mise run docker:build-clean     # Clean build without cache
-mise run docker:restart         # Restart container
+mise run db             # Build image
+mise run dt             # Tag for registry
+mise run dp             # Push to registry
+mise run dbp            # Build, tag, and push (all-in-one)
+mise run du             # Start container
+mise run dd             # Stop container
+mise run dl             # Follow logs
 ```
 
 **Or use docker/compose directly:**
@@ -78,135 +56,111 @@ docker compose up -d               # Start in detached mode
 docker compose logs -f app         # Follow logs
 
 # Build for registry
-docker build -t ghcr.io/engeir/lastfm-stats:latest .
-docker push ghcr.io/engeir/lastfm-stats:latest
+docker build -f Dockerfile.fastapi -t ghcr.io/engeir/lytter:latest .
+docker push ghcr.io/engeir/lytter:latest
 ```
-
-**Build Performance:**
-- **First build**: ~10 minutes (downloads npm packages, builds frontend)
-- **Code-only changes**: ~5-10 seconds (cached layers)
-- **Container startup**: ~5 seconds (everything pre-built)
-- **Image size**: ~1GB (optimized with slim base image)
 
 **Deploy to VPS:**
 ```bash
 # On your VPS
-docker pull ghcr.io/engeir/lastfm-stats:latest
+docker pull ghcr.io/engeir/lytter:latest
 
 # Run with environment variables
 docker run -d \
-  --name lastfm-stats \
+  --name lytter \
   --restart unless-stopped \
-  -p 80:3000 \
   -p 8000:8000 \
-  -v /path/to/reflex.db:/app/reflex.db \
-  -e API_KEY=your_key \
-  -e API_SECRET=your_secret \
-  -e USER_NAME=your_username \
-  -e PASSWORD=your_password \
-  -e GENIUS_TOKEN=your_token \
-  -e UPDATE_PASSWORD=your_update_password \
-  ghcr.io/engeir/lastfm-stats:latest
+  -v ./music.db:/app/music.db \
+  --env-file .env \
+  ghcr.io/engeir/lytter:latest
 
-# Or use with .env file
-docker run -d \
-  --name lastfm-stats \
-  --restart unless-stopped \
-  -p 80:3000 \
-  -p 8000:8000 \
-  -v /path/to/reflex.db:/app/reflex.db \
-  --env-file /path/to/.env \
-  ghcr.io/engeir/lastfm-stats:latest
+# Set up cron for updates
+crontab -e
+# Add: */15 * * * * docker exec lytter uv run lytter-cron >> ~/lytter-cron.log 2>&1
 ```
-
-**Architecture:**
-- Single container with everything built-in (Redis + backend + frontend)
-- Frontend pre-built with `reflex export` during image build
-- Backend runs in production mode (`--env prod`)
-- Redis runs in container for state management
-- Database mounted as volume (persists across restarts)
-
-**Workflow:**
-1. Develop locally: `uv run reflex run`
-2. Build image: `mise run docker:build-direct`
-3. Test locally: `docker run --env-file .env -p 3000:3000 -p 8000:8000 ghcr.io/engeir/lastfm-stats:latest`
-4. Push to registry: `mise run dp`
-5. Deploy to VPS: `docker pull && docker run`
-
-See `docker-build-guide.md` for detailed information.
 
 ## Architecture
 
-### Application Structure
+- **Framework**: FastAPI with Jinja2 templates
+- **Database**: SQLite (music.db) - simple, file-based
+- **APIs**: Last.fm API (via pylast), Genius API (lyrics)
+- **Structure**: Modern src/ layout with proper packaging
 
-- **`lastfm_stats/lastfm_stats.py`**: Main app entry point. Configures the Reflex app with theme settings (purple accent, inherit appearance).
-- **`rxconfig.py`**: Reflex configuration including database URL, app name, and plugins (sitemap).
-- **`lastfm_stats/config.py`**: Global configuration that loads environment variables for Last.fm API credentials, Genius API token, and timezone settings.
+### Project Structure
+```
+src/lytter/
+  __init__.py           - Package initialization
+  app.py                - Main FastAPI application
+  update_db.py          - Manual database update script
+  cron_updater.py       - Cron-friendly updater
+  background_updater.py - Continuous background updater
+  db_status.py          - Database status checker
+  gap_checker.py        - Find gaps in scrobble history
+  templates/            - Jinja2 HTML templates
+  static/               - Static assets
+```
 
 ### Key Components
 
-**Pages** (`lastfm_stats/pages/`):
-- `index.py`: Landing page with database update functionality (password-protected)
-- `now_playing.py`: Core feature showing current track with detailed stats, lyrics, and visualizations
-- Other pages in the directory provide additional views
+**Main Application** (`src/lytter/app.py`):
+- FastAPI app with routes for displaying stats
+- `GetScrobbles` class: Fetches scrobbles from Last.fm API
+- `CurrentStats` class: Generates Plotly visualizations
+- Database helper functions: `get_db_connection()`, `init_db()`
 
-**Data Layer** (`lastfm_stats/tools/`):
-- `download_scrobbles.py`: Fetches scrobbles from Last.fm API and stores in SQLite via the `MusicLibrary` model. Implements incremental updates (stops when existing timestamp found) and full refresh mode.
-- `mylast.py`: Creates the Last.fm network connection and provides utility functions for track/artist parsing
-- `stats_lookup.py`: Generates statistics and visualizations using the stored scrobble data
-- `get_lyrics.py`: Fetches lyrics from Genius API
+**Update Scripts**:
+- `update_db.py`: Interactive CLI with `--full`, `--thorough`, `--pages` options
+- `cron_updater.py`: Silent, cron-friendly incremental updates
+- `background_updater.py`: APScheduler-based continuous updater
 
 **Database**:
-- Uses SQLModel (Reflex's `rx.Model`) for ORM
-- Primary model: `MusicLibrary` (in `download_scrobbles.py`) stores artist, album, track info with MusicBrainz IDs and unique timestamps
 - SQLite database at `music.db`
-- Alembic for migrations (config in `alembic.ini`, migrations in `alembic/versions/`)
-
-### State Management
-
-Reflex uses reactive state classes (subclass `rx.State`). Key states:
-- `NowPlayingState` (in `now_playing.py`): Manages current track data, artist stats, lyrics, and Plotly figures
-- `HiddenState` (in `index.py`): Handles password verification for database updates
-- State methods use generators with `yield` for async-like operations or can use `@rx.event(background=True)` for true background tasks
+- Schema: `musiclibrary` table (artist, album, track, timestamps, MusicBrainz IDs)
+- Incremental updates: Stops when encountering 50 consecutive existing scrobbles
 
 ### External APIs
 
 1. **Last.fm API**: Via `pylast` library
    - Fetches scrobbles, now playing, artist/track/album stats
-   - Requires `API_KEY`, `API_SECRET`, `USER_NAME`, `PASSWORD_HASH` from environment
+   - Requires `API_KEY`, `API_SECRET`, `USER_NAME`, `PASSWORD` from environment
 
 2. **Genius API**: Via `lyricsgenius` library
-   - Fetches song lyrics
+   - Fetches song lyrics (optional)
    - Requires `GENIUS_TOKEN` from environment
 
 ## Environment Variables
 
 Required in `.env` file (see `.env.example`):
-- `API_KEY`: Last.fm API key
-- `API_SECRET`: Last.fm API secret
-- `USER_NAME`: Last.fm username
-- `PASSWORD`: Last.fm password (hashed with `pylast.md5()`)
-- `GENIUS_TOKEN`: Genius API access token
-- `UPDATE_PASSWORD`: Password for triggering database updates via web UI
+```bash
+API_KEY=your_lastfm_api_key
+API_SECRET=your_lastfm_api_secret
+USER_NAME=your_lastfm_username
+PASSWORD=your_lastfm_password
+GENIUS_TOKEN=your_genius_api_token  # optional
+UPDATE_PASSWORD=password_for_db_updates
+```
 
 ## Development Notes
 
 ### Code Style
 - Docstrings follow NumPy convention (configured in pyproject.toml)
-- Type hints are enforced (mypy configured for strict checking)
-- Ruff handles linting with pydocstyle (D), pyflakes (F), pycodestyle (E), pylint (PL), and more
+- Type hints encouraged but not strictly enforced
+- Ruff handles linting with pydocstyle (D), pyflakes (F), pycodestyle (E), pylint (PL)
 
 ### Database Updates
-The `GetScrobbles` class in `download_scrobbles.py` implements smart incremental updates:
-- By default, stops fetching when it encounters an existing timestamp
-- Use `full=True` parameter to force complete refresh (useful after data corruption)
-- Rate limiting via `pause_duration` (currently 0.2s, but commented out)
+The `GetScrobbles` class implements smart incremental updates:
+- By default, stops fetching when it encounters 50 consecutive existing scrobbles
+- Use `--full` parameter to force complete refresh
+- Uses `CONSECUTIVE_SCROBBLES_THRESHOLD` constant for the stop threshold
 
-### Reflex-Specific Patterns
-- Components are functions that return `rx.Component`
-- Use `@template` decorator (from `templates/template.py`) for consistent page layout
-- State updates trigger automatic UI re-renders
-- Conditional rendering via `rx.cond(condition, true_case, false_case)`
+### Running the Application
+```bash
+# Development (with auto-reload)
+uv run uvicorn lytter.app:app --reload --host 0.0.0.0 --port 8000
 
-### Timezone Handling
-Default timezone is Europe/Oslo (`pendulum.timezone("Europe/Oslo")`). Timestamps from Last.fm API are converted to this timezone for display.
+# Production (via Docker)
+docker run -p 8000:8000 --env-file .env ghcr.io/engeir/lytter:latest
+```
+
+### Deployment Pipeline
+GitHub Actions (`.github/workflows/publish.yml`) builds and pushes to `ghcr.io/engeir/lytter` on pushes to the `release` branch.

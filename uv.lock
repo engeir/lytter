@@ -299,7 +299,7 @@ wheels = [
 ]
 
 [[package]]
-name = "lastfm-stats"
+name = "lytter"
 version = "0.3.7"
 source = { editable = "." }
 dependencies = [

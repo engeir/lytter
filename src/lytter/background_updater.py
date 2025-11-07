@@ -6,7 +6,7 @@ import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from simple_app import GetScrobbles, init_db
+from lytter.app import GetScrobbles, init_db
 
 # Setup logging
 logging.basicConfig(
@@ -39,7 +39,7 @@ def update_database():
 
 
 def main():
-    """Main function to run the scheduler."""
+    """Run the scheduler for background updates."""
     logger.info("🚀 Starting Last.fm background updater")
     logger.info("Schedule: Every hour")
 

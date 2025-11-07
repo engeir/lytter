@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check for gaps in the scrobbles database and fill them."""
 
+import argparse
 import os
 import sqlite3
 from datetime import datetime, timedelta
@@ -63,7 +64,7 @@ def find_timestamp_gaps(hours_back=24, gap_threshold=3600):
 
 def fetch_scrobbles_in_range(from_timestamp, to_timestamp):
     """Fetch scrobbles from Last.fm API in a specific time range."""
-e   url  "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={}&api_key={}&limit=200&from={}&to={}&page={}&format=json"
+    url = "https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user={}&api_key={}&limit=200&from={}&to={}&page={}&format=json"
 
     all_scrobbles = []
     page = 1
@@ -183,9 +184,7 @@ def fill_gaps(gaps, dry_run=True):
 
 
 def main():
-    """Main gap checking function."""
-    import argparse
-
+    """Check for and optionally fill gaps in scrobbles database."""
     parser = argparse.ArgumentParser(
         description="Check for and fill gaps in scrobbles database"
     )

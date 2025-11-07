@@ -23,21 +23,20 @@ uv run pre-commit run --all-files
 
 ### Production (Docker)
 
-<!-- x-release-please-start-version -->
-
 ```bash
-# Pull and run
-docker pull ghcr.io/engeir/lytter:v0.3.7
+# Pull and run latest
+docker pull ghcr.io/engeir/lytter:latest
 docker run -d \
   --name lytter \
   --restart unless-stopped \
   -p 8000:8000 \
   -v ./music.db:/app/music.db \
   --env-file .env \
-  ghcr.io/engeir/lytter:v0.3.7
-```
+  ghcr.io/engeir/lytter:latest
 
-<!-- x-release-please-end -->
+# Or specific version (e.g., 2025.1.0)
+docker pull ghcr.io/engeir/lytter:2025.1.0
+```
 
 Or use docker compose:
 

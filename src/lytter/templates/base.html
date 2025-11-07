@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Last.fm Stats{% endblock %}</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #f0f6fc;
+        }
+        .navbar {
+            background-color: #21262d !important;
+            border-bottom: 1px solid #30363d;
+        }
+        .navbar-brand, .nav-link {
+            color: #f0f6fc !important;
+        }
+        .nav-link:hover {
+            color: #58a6ff !important;
+        }
+        .card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+        }
+        .card-title {
+            color: #f0f6fc;
+        }
+        .btn-primary {
+            background-color: #238636;
+            border-color: #238636;
+            color: #ffffff;
+        }
+        .btn-primary:hover {
+            background-color: #2ea043;
+            border-color: #2ea043;
+        }
+        .text-primary {
+            color: #58a6ff !important;
+        }
+        .bg-dark {
+            background-color: #0d1117 !important;
+        }
+        .text-light {
+            color: #f0f6fc !important;
+        }
+        .border-bottom {
+            border-color: #30363d !important;
+        }
+        .text-muted {
+            color: #8b949e !important;
+        }
+        .card-subtitle, .card-subtitle.mb-2.text-muted {
+            color: #58a6ff !important;
+        }
+        .card-text, .card-text small {
+            color: #f0f6fc !important;
+        }
+        /* Fix badge colors */
+        .badge.bg-primary {
+            background-color: #58a6ff !important;
+            color: #0d1117 !important;
+        }
+        /* Fix link colors */
+        a {
+            color: #58a6ff;
+        }
+        a:hover {
+            color: #79c0ff;
+        }
+        /* Fix breadcrumb */
+        .breadcrumb-item a {
+            color: #58a6ff;
+        }
+        /* Ensure chart containers have minimum height */
+        #timeline-chart, #artists-chart {
+            min-height: 400px;
+        }
+        /* Make artists chart scrollable */
+        #artists-chart {
+            position: relative;
+        }
+        #artists-chart::-webkit-scrollbar {
+            width: 8px;
+        }
+        #artists-chart::-webkit-scrollbar-track {
+            background: #161b22;
+        }
+        #artists-chart::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+        #artists-chart::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">🎵 Last.fm Stats</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="/">Dashboard</a>
+                <a class="nav-link" href="/stats">Statistics</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,29 +1,66 @@
+# Development tasks
 [tasks.run]
-description = "Run the reflex app locally"
-run = "uv run reflex run"
+description = "Run the FastAPI app locally"
+run = "uv run uvicorn lytter.app:app --reload --host 0.0.0.0 --port 8000"
 alias = "r"
+
+[tasks.sync]
+description = "Install all dependencies"
+run = "uv sync"
+alias = "i"
 
 [tasks.install]
 description = "Install all dependencies"
-run = """
-#!/bin/bash
-uv sync
-uv export --no-hashes --no-header --no-dev --no-emit-project -o requirements.txt
-"""
-alias = "i"
+run = "uv sync"
 
-[tasks.build]
-description = "Build the docker container"
-run = "docker build -t ghcr.io/engeir/lastfm-stats:latest ."
-alias = "b"
-depends = ["install"]
+# Docker tasks
+[env]
+DOCKER_BUILDKIT = "1"
 
-[tasks.start]
-description = "Start the docker container"
-run = "docker run --env-file .env -it --rm -p 3000:3000 -p 8000:8000 --detach --name lastfm-stats ghcr.io/engeir/lastfm-stats:latest"
-alias = "s"
+[tasks."docker:build"]
+description = "Build Docker image"
+run = "docker compose build"
+alias = "db"
 
-[tasks.push]
+[tasks."docker:tag"]
+description = "Tag image for registry"
+run = "docker tag lytter-app:latest ghcr.io/engeir/lytter:latest"
+alias = "dt"
+
+[tasks."docker:build-clean"]
+description = "Clean build without cache"
+run = "docker compose build --no-cache"
+
+[tasks."docker:up"]
+description = "Start service"
+run = "docker compose up -d"
+alias = "du"
+
+[tasks."docker:up-build"]
+description = "Build and start service"
+run = "docker compose up --build -d"
+alias = "dub"
+
+[tasks."docker:down"]
+description = "Stop service"
+run = "docker compose down"
+alias = "dd"
+
+[tasks."docker:logs"]
+description = "Follow logs"
+run = "docker compose logs -f app"
+alias = "dl"
+
+[tasks."docker:push"]
 description = "Push image to GitHub Container Registry"
-run = "docker push ghcr.io/engeir/lastfm-stats:latest"
-alias = "p"
+run = "docker push ghcr.io/engeir/lytter:latest"
+alias = "dp"
+
+[tasks."docker:build-and-push"]
+description = "Build, tag, and push image to registry"
+run = "mise run db && mise run dt && mise run dp"
+alias = "dbp"
+
+[tasks."docker:restart"]
+description = "Restart service"
+run = "docker compose restart"

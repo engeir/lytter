@@ -1,8 +1,79 @@
+# Build artifacts and cache
 .web
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.eggs
+.mypy_cache
+.ruff_cache
+.pytest_cache
+
+# Git and version control
 .git
-__pycache__/*
+.gitignore
+.github
+
+# Docker files
 Dockerfile
 Caddy.Dockerfile
+*.Dockerfile
 compose.yaml
+compose.yml
 compose.*.yaml
+.dockerignore
+
+# Database files (these should not be in the image!)
+*.db
+*.db-shm
+*.db-wal
+reflex.bak.db
+
+# Virtual environments
+.venv
+venv
+env
+ENV
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Development and testing
+.env.local
+.env.*.local
 uploaded_files
+.states
+examples
+
+# Documentation and CI
+# NOTE: README.md is required by pyproject.toml, so we must include it!
+CHANGELOG.md
+CLAUDE.md
+docker-build-guide.md
+DOCKER_OPTIMIZATION_SUMMARY.md
+.pre-commit-config.yaml
+.editorconfig
+.flake8
+
+# Backup and temporary files
+*.bak
+assets.bak
+data
+
+# Just/Make files
+justfile
+Makefile
+
+# Configuration that might have local paths
+.mise.*.toml

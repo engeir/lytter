@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Last.fm Stats{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Last.fm Statistics Dashboard</h1>
+    </div>
+</div>
+
+{% if current_track %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">🎧 Currently Playing</h5>
+                <h6 class="card-subtitle mb-2 text-muted">{{ current_track.artist }}</h6>
+                <p class="card-text">
+                    <strong>{{ current_track.title }}</strong><br>
+                    <small>from {{ current_track.album }}</small>
+                </p>
+                <a href="/artist/{{ current_track.artist }}" class="btn btn-primary btn-sm">View Artist Stats</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Total Scrobbles</h5>
+                <h3 class="text-primary">{{ "{:,}".format(total_scrobbles) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unique Artists</h5>
+                <h3 class="text-primary">{{ "{:,}".format(unique_artists) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unique Tracks</h5>
+                <h3 class="text-primary">{{ "{:,}".format(unique_tracks) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unique Albums</h5>
+                <h3 class="text-primary">{{ "{:,}".format(unique_albums) }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listening Timeline</h5>
+                <div id="timeline-chart" style="height: 400px;">
+                    <div class="d-flex justify-content-center align-items-center h-100">
+                        <p class="text-muted">Loading chart...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Recent Favorites</h5>
+                <div id="recent-stats">
+                    <div class="d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                        <p class="text-muted">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Top Artists</h5>
+                <div id="top-artists-list">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Check if Plotly is loaded
+if (typeof Plotly === 'undefined') {
+    console.error('Plotly is not loaded!');
+    document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Plotly.js failed to load</p>';
+    document.getElementById('artists-chart').innerHTML = '<p class="text-muted">Plotly.js failed to load</p>';
+} else {
+    console.log('Plotly is loaded, version:', Plotly.version);
+
+    // Load listening timeline chart
+    fetch('/charts/listening-timeline')
+        .then(response => {
+            console.log('Timeline response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Timeline data received, plotting...');
+            Plotly.newPlot('timeline-chart', data.data, data.layout, {responsive: true});
+            console.log('Timeline chart plotted successfully');
+        })
+        .catch(error => {
+            console.error('Error loading timeline chart:', error);
+            document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Error: ' + error.message + '</p>';
+        });
+
+    // Load recent stats
+    fetch('/recent-stats')
+        .then(response => {
+            console.log('Recent stats response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Recent stats data received');
+            const html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="mb-3" style="color: #58a6ff;">Past Week</h6>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Artists</h6>
+                        <ol class="mb-3 ps-3" style="font-size: 0.9rem; color: #f0f6fc;">
+                            ${data.week_artists.map(a => `<li>${a.artist} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        </ol>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Albums</h6>
+                        <ol class="mb-3 ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
+                            ${data.week_albums.map(a => `<li>${a.artist} - ${a.album} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        </ol>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Songs</h6>
+                        <ol class="ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
+                            ${data.week_songs.map(s => `<li>${s.artist} - ${s.track} <span style="color: #8b949e;">(${s.plays})</span></li>`).join('')}
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3" style="color: #58a6ff;">Past Month</h6>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Artists</h6>
+                        <ol class="mb-3 ps-3" style="font-size: 0.9rem; color: #f0f6fc;">
+                            ${data.month_artists.map(a => `<li>${a.artist} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        </ol>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Albums</h6>
+                        <ol class="mb-3 ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
+                            ${data.month_albums.map(a => `<li>${a.artist} - ${a.album} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        </ol>
+                        <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Songs</h6>
+                        <ol class="ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
+                            ${data.month_songs.map(s => `<li>${s.artist} - ${s.track} <span style="color: #8b949e;">(${s.plays})</span></li>`).join('')}
+                        </ol>
+                    </div>
+                </div>
+            `;
+            document.getElementById('recent-stats').innerHTML = html;
+            console.log('Recent stats populated');
+        })
+        .catch(error => {
+            console.error('Error loading recent stats:', error);
+            document.getElementById('recent-stats').innerHTML = '<p class="text-muted">Error: ' + error.message + '</p>';
+        });
+}
+
+// Load top artists list (doesn't need Plotly)
+fetch('/top-artists')
+    .then(response => {
+        console.log('Top artists list response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Top artists data received:', data.artists.length, 'artists');
+
+        // Find max plays for scaling bars
+        const maxPlays = data.artists.length > 0 ? data.artists[0].plays : 1;
+
+        const list = data.artists.map(artist => {
+            // Calculate bar width - top artist gets 100% of available space
+            const maxWidthPercent = 100;
+            const barWidth = (artist.plays / maxPlays) * maxWidthPercent;
+
+            return `<div class="d-flex justify-content-between align-items-center py-3 position-relative" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
+                <a href="/artist/${encodeURIComponent(artist.artist)}" class="text-decoration-none flex-grow-1 me-3" style="color: #f0f6fc; max-width: 40%; font-size: 0.95rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${artist.artist}</a>
+                <div class="d-flex align-items-center flex-grow-1" style="max-width: 60%; justify-content: flex-end;">
+                    <div style="
+                        width: ${barWidth}%;
+                        height: 32px;
+                        background: linear-gradient(90deg, rgba(56, 139, 253, 0.3) 0%, rgba(56, 139, 253, 0.8) 100%);
+                        border-radius: 0.375rem 0 0 0.375rem;
+                    "></div>
+                    <span style="
+                        background: linear-gradient(135deg, #58a6ff 0%, #388bfd 100%);
+                        color: #0d1117;
+                        font-weight: 600;
+                        font-size: 0.9rem;
+                        padding: 0.5rem 0.75rem;
+                        border-radius: 0 0.375rem 0.375rem 0;
+                        min-width: 70px;
+                        text-align: center;
+                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    ">${artist.plays.toLocaleString()}</span>
+                </div>
+            </div>`;
+        }).join('');
+
+        document.getElementById('top-artists-list').innerHTML = list;
+        console.log('Top artists list populated');
+    })
+    .catch(error => {
+        console.error('Error loading top artists:', error);
+        document.getElementById('top-artists-list').innerHTML = '<p class="text-muted">Error loading artists</p>';
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+services:
+  app:
+    image: lytter-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    ports:
+      - "8000:8000"
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - ./music.db:/app/music.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

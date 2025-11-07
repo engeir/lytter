@@ -1,3 +1,6 @@
+[tools]
+"cargo:git-cliff" = "latest"
+
 # Development tasks
 [tasks.run]
 description = "Run the FastAPI app locally"

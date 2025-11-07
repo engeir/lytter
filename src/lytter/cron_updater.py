@@ -8,7 +8,7 @@ from pathlib import Path
 from lytter.app import GetScrobbles, init_db
 
 # Setup logging
-log_file = Path(__file__).parent / "lastfm_updates.log"
+log_file = Path(__file__).parent / "lytter_updates.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",

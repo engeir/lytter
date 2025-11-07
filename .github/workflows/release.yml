@@ -19,7 +19,7 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
           release-type: python
-          package-name: lastfm
+          package-name: lytter
           extra-files: |
             README.md
           changelog-types: '[{"type":"feat","section":"Features","hidden":false},{"type":"fix","section":"Bug Fixes","hidden":false},{"type":"chore","section":"Miscellaneous","hidden":false},{"type":"style","section":"Styles","hidden":false},{"type":"refactor","section":"Code Refactoring","hidden":false},{"type":"perf","section":"Performance","hidden":false},{"type":"test","section":"Tests","hidden":false},{"type":"ci","section":"Continuous Integration","hidden":false},{"type":"build","section":"Build System","hidden":false},{"type":"docs","section":"Documentation","hidden":false}]'
@@ -31,5 +31,5 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         run: |
           docker login ghcr.io -u engeir -p ${{ secrets.DOCKER_GHCR }}
-          docker build -t ghcr.io/engeir/lastfm-stats:${{ steps.release.outputs.tag_name }} .
-          docker push ghcr.io/engeir/lastfm-stats:${{ steps.release.outputs.tag_name }}
+          docker build -t ghcr.io/engeir/lytter:${{ steps.release.outputs.tag_name }} .
+          docker push ghcr.io/engeir/lytter:${{ steps.release.outputs.tag_name }}

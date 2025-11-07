@@ -1,5 +1,5 @@
 # Example systemd service for Last.fm stats app
-# Save as /etc/systemd/system/lastfm-stats.service
+# Save as /etc/systemd/system/lytter.service
 
 [Unit]
 Description=Last.fm Stats Web Application
@@ -8,8 +8,8 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/path/to/lastfm-stats
-Environment=PATH=/path/to/lastfm-stats/.venv/bin
+WorkingDirectory=/path/to/lytter
+Environment=PATH=/path/to/lytter/.venv/bin
 ExecStart=/usr/bin/uv run uvicorn simple_app:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
@@ -18,5 +18,5 @@ RestartSec=10
 WantedBy=multi-user.target
 
 # To install and start:
-# sudo systemctl enable lastfm-stats.service
-# sudo systemctl start lastfm-stats.service
+# sudo systemctl enable lytter.service
+# sudo systemctl start lytter.service

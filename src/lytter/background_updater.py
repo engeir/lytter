@@ -12,7 +12,7 @@ from lytter.app import GetScrobbles, init_db
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("lastfm_updater.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler("lytter_updater.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 

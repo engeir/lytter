@@ -17,8 +17,8 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src/ src/
 RUN uv sync --frozen
 
-# Create directory for database
-RUN mkdir -p /app/data
+# Create directories
+RUN mkdir -p /app/data /app/src/lytter/static
 
 EXPOSE 8000
 

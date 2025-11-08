@@ -11,6 +11,7 @@ import pylast
 import requests
 import uvicorn
 from dotenv import load_dotenv
+from rapidfuzz import fuzz, process
 
 # Note: These imports may show errors in the editor but will work when dependencies are installed
 try:
@@ -662,14 +663,90 @@ async def artist_top_albums(artist: str):
     return {"albums": albums}
 
 
+@app.get("/api/search/artists")
+async def search_artists(q: str = "", limit: int = 10) -> dict:
+    """Search artists with fuzzy matching using rapidfuzz.
+
+    Parameters
+    ----------
+    q : str
+        Search query (minimum 2 characters)
+    limit : int
+        Maximum number of results to return (default: 10)
+
+    Returns
+    -------
+    dict
+        Dictionary with 'results' key containing list of matching artists
+        Each result has: artist (name), plays (count), similarity (0-100 score)
+    """
+    min_query_length = 2
+    if not q or len(q) < min_query_length:
+        return {"results": []}
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all artists with their play counts
+    cursor.execute("""
+        SELECT artist, COUNT(*) as plays
+        FROM musiclibrary
+        GROUP BY artist
+    """)
+    all_artists = {row[0]: row[1] for row in cursor.fetchall()}
+    conn.close()
+
+    if not all_artists:
+        return {"results": []}
+
+    q_lower = q.lower()
+
+    # Combine multiple matching strategies for best results
+    results_dict = {}
+
+    # Strategy 1: Exact substring match (case-insensitive) - highest priority
+    for artist, plays in all_artists.items():
+        if q_lower in artist.lower():
+            # Perfect substring match gets 100 similarity
+            results_dict[artist] = {
+                "artist": artist,
+                "plays": plays,
+                "similarity": 100.0,
+            }
+
+    # Strategy 2: Fuzzy matching for artists not already matched
+    remaining_artists = [a for a in all_artists.keys() if a not in results_dict]
+    if remaining_artists:
+        matches = process.extract(
+            q,
+            remaining_artists,
+            scorer=fuzz.WRatio,  # Weighted ratio for fuzzy matches
+            limit=limit * 2,
+            score_cutoff=60,  # Only decent matches
+        )
+
+        for match in matches:
+            artist = match[0]
+            results_dict[artist] = {
+                "artist": artist,
+                "plays": all_artists[artist],
+                "similarity": round(match[1], 1),
+            }
+
+    # Convert to list
+    results = list(results_dict.values())
+
+    # Sort by:
+    # 1. Similarity score (higher is better)
+    # 2. Play count (more popular is better as tiebreaker)
+    results.sort(key=lambda x: (x["similarity"], x["plays"]), reverse=True)
+
+    # Limit to requested number
+    return {"results": results[:limit]}
+
+
 # Removed admin panel and web-based updates
 # Database updates should be handled via cron jobs or background tasks
-
-
-@app.get("/stats", response_class=HTMLResponse)
-async def stats_page(request: Request):
-    """Statistics page."""
-    return templates.TemplateResponse("stats.html", {"request": request})
 
 
 def main():

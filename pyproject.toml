@@ -1,6 +1,6 @@
 [project]
 name = "lytter"
-version = "2025.11.3"
+version = "2025.11.4"
 description = "Last.fm statistics application"
 authors = [{ name = "Eirik Rolland Enger", email = "engeir@pm.me" }]
 license = "MIT"

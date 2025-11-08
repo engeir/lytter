@@ -10,6 +10,7 @@ permissions:
 jobs:
   release-pr:
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, 'chore(release):')"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -198,7 +199,7 @@ jobs:
             echo "changelog=Release ${{ steps.extract_version.outputs.version }}" >> $GITHUB_OUTPUT
           fi
       - name: Create GitHub Release
-        uses: ncipollo/create-release@v1
+        uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.extract_version.outputs.version }}
           name: Release ${{ steps.extract_version.outputs.version }}

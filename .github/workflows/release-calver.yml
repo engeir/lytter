@@ -117,10 +117,28 @@ jobs:
           NEW_VERSION="${{ steps.calver.outputs.new_tag }}"
           sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" pyproject.toml
 
-          # Create/update CHANGELOG.md
-          cat > CHANGELOG.md << 'EOF'
-          ${{ steps.changelog.outputs.content }}
-          EOF
+          # Update CHANGELOG.md - prepend new release to existing changelog
+          NEW_CHANGELOG='${{ steps.changelog.outputs.content }}'
+          if [ -f CHANGELOG.md ]; then
+            # Existing changelog - prepend new release after the header
+            # Extract header (first 3 lines: # Changelog + blank + description)
+            head -n 3 CHANGELOG.md > CHANGELOG.tmp
+            # Add new release
+            echo "" >> CHANGELOG.tmp
+            echo "$NEW_CHANGELOG" >> CHANGELOG.tmp
+            # Add existing releases (skip header)
+            tail -n +4 CHANGELOG.md >> CHANGELOG.tmp
+            mv CHANGELOG.tmp CHANGELOG.md
+          else
+            # No existing changelog - create new one with header
+            {
+              echo "# Changelog"
+              echo ""
+              echo "All notable changes to this project will be documented in this file."
+              echo ""
+              echo "$NEW_CHANGELOG"
+            } > CHANGELOG.md
+          fi
 
           git add pyproject.toml CHANGELOG.md
           git diff --staged --quiet || git commit -m "chore(release): prepare release $NEW_VERSION"

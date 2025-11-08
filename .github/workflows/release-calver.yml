@@ -210,7 +210,7 @@ jobs:
       - name: Build and push Docker image
         run: |
           VERSION="${{ steps.extract_version.outputs.version }}"
-          echo "${{ secrets.RELEASE_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker build -f Dockerfile.fastapi -t ghcr.io/engeir/lytter:$VERSION -t ghcr.io/engeir/lytter:latest .
           docker push ghcr.io/engeir/lytter:$VERSION
           docker push ghcr.io/engeir/lytter:latest

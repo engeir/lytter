@@ -155,8 +155,7 @@ jobs:
               --title "chore(release): $NEW_TAG" \
               --body "$PR_BODY" \
               --base main \
-              --head release-please \
-              --label "release"
+              --head release-please
             echo "Created new release PR"
           fi
         env:

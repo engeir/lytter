@@ -1,117 +1,40 @@
-# Changelog
+## [unreleased]
 
-## [0.3.7](https://github.com/engeir/lastfm-stats/compare/v0.3.6...v0.3.7) (2024-03-16)
+### Bug Fixes
 
+- **(ci)** Use RELEASE_TOKEN for han-eirik user attribution - ([d6be960](d6be960136eac77c448e3b1831ac056d62a28a15)) by @engeir
+- **(ci)** Remove release label requirement from PR creation - ([4b13221](4b13221c9e3eddc6e656c5d370c21d6901852b19)) by @engeir
+- **(ci)** Use mise to run git-cliff instead of Docker action - ([e063e16](e063e169bb3d7e2ca46724d788b4f43b35d165cc)) by @engeir
 
-### Continuous Integration
+### Refactoring
 
-* **fix:** idiot ([04d8031](https://github.com/engeir/lastfm-stats/commit/04d8031a858b3fe71a3bdd0415a0c95edc6e2fed))
-
-## [0.3.6](https://github.com/engeir/lastfm-stats/compare/v0.3.5...v0.3.6) (2024-03-16)
-
-
-### Continuous Integration
-
-* **fix:** add permissions ([78cff48](https://github.com/engeir/lastfm-stats/commit/78cff48b31f540945213e88200dd558f58d88d8a))
-* **fix:** fix workflow file ([4d5ed8a](https://github.com/engeir/lastfm-stats/commit/4d5ed8a700592ae2ef0a1e08087ae747bfd6311a))
-
-## [0.3.5](https://github.com/engeir/lastfm-stats/compare/v0.3.4...v0.3.5) (2024-03-16)
-
-
-### Continuous Integration
-
-* **fix:** latest tag ([6e7e40c](https://github.com/engeir/lastfm-stats/commit/6e7e40c5b95e433b430dc019ac07c09bc1df9288))
-
-## [0.3.4](https://github.com/engeir/lastfm-stats/compare/v0.3.3...v0.3.4) (2024-03-16)
-
-
-### Continuous Integration
-
-* **fix:** try fixing docker build ([8abd798](https://github.com/engeir/lastfm-stats/commit/8abd798c649a9830f61dc4e1c1e9d0a68b37cf17))
-
-## [0.3.3](https://github.com/engeir/lastfm-stats/compare/v0.3.2...v0.3.3) (2024-03-16)
-
-
-### Continuous Integration
-
-* **fix:** use custom PAT secret for better control over access ([d2e61e9](https://github.com/engeir/lastfm-stats/commit/d2e61e9566954e78c3144c2251ab5fe35e8db4bc))
-* **github:** integrate docker images with releases ([c3b7ee7](https://github.com/engeir/lastfm-stats/commit/c3b7ee7614532fe071c8d7b1752fdff7c298fb23))
-
-## [0.3.2](https://github.com/engeir/lastfm-stats/compare/v0.3.1...v0.3.2) (2024-03-14)
-
-
-### Build System
-
-* **deps:** bump fastapi from 0.96.1 to 0.109.1 ([#6](https://github.com/engeir/lastfm-stats/issues/6)) ([483e09a](https://github.com/engeir/lastfm-stats/commit/483e09adb87744f9612a30ec12d829ea43994b8a))
-* **deps:** bump python-multipart from 0.0.5 to 0.0.7 ([#7](https://github.com/engeir/lastfm-stats/issues/7)) ([84d9403](https://github.com/engeir/lastfm-stats/commit/84d9403d6c47a3e949926b8178e25ea9732c6e72))
-* **deps:** bump starlette from 0.27.0 to 0.36.2 ([#5](https://github.com/engeir/lastfm-stats/issues/5)) ([92271ca](https://github.com/engeir/lastfm-stats/commit/92271caf36819710523748d309c320e107f21240))
-
-
-### Documentation
-
-* remove auto generated reflex docs in README ([69be675](https://github.com/engeir/lastfm-stats/commit/69be675e02392b44d527534ea9793a7c4e19a2c6))
-
-## [0.3.1](https://github.com/engeir/lastfm-stats/compare/v0.3.0...v0.3.1) (2024-03-14)
-
-
-### Continuous Integration
-
-* **github:** publish to github on every push to main ([5417153](https://github.com/engeir/lastfm-stats/commit/5417153e2bdf3957d4b202b37a6c3bbc0c1c09d8))
-
-## [0.3.0](https://github.com/engeir/lastfm-stats/compare/v0.2.0...v0.3.0) (2024-03-14)
-
-
-### Features
-
-* **docker:** refactor so that docker build succeeds ([1623051](https://github.com/engeir/lastfm-stats/commit/162305143d7c0526bca5d41df96f943f2b25d2d6))
-
+- **(data)** Move from CSV to SQLModel - ([f6fbf84](f6fbf84d32754d5563eb098582ee0d3a94eca37c)) by @engeir
+- [**breaking**] Move from reflex to fastapi version (#22) - ([92c7324](92c7324ad4ed5e612a7e43c1eca835bb8f638f4b)) by @engeir in [#22](https://github.com/engeir/lytter/pull/22)
 
 ### Miscellaneous
 
-* start on a recently page and improve now playing ([e488d57](https://github.com/engeir/lastfm-stats/commit/e488d57039df6d8e42fc5e5ad48e61a2df797814))
+- Small update - ([45ecdc6](45ecdc6743f3f16d23d96938ec767a6a57900a5e)) by @engeir
+- Update the app - ([16d734c](16d734c434136c9fcf10f1f6a0ec57a50fff2783)) by @engeir
+- Update after a long break - ([6dea6f8](6dea6f8e490b73756f1b2b43cc801383f86513ba)) by @engeir
+- Ignore alembic paths - ([6c0dc05](6c0dc0522316f362162df7fc418557891144e56b)) by @engeir
+- Move old scripts out of the package - ([b65deca](b65deca8f891ba37ba650f1052d509e03d9931e2)) by @engeir
+- Push changes ... - ([39d8e42](39d8e4207053acd3f6bb91e98156f08c5c7a6bb0)) by @engeir
 
+### Build
 
-### Continuous Integration
+- **(deps)** Bump pillow from 10.2.0 to 10.3.0 (#19) - ([2e45a46](2e45a4674272ced47545fbf05662673c53ac932f)) by @dependabot[bot] in [#19](https://github.com/engeir/lytter/pull/19)
+- **(deps)** Bump idna from 3.6 to 3.7 (#18) - ([774512b](774512bf711ab24a6b8254d34ce8437ad2222af7)) by @dependabot[bot] in [#18](https://github.com/engeir/lytter/pull/18)
+- **(deps)** Bump python-multipart from 0.0.5 to 0.0.7 (#17) - ([51f0f0a](51f0f0a319e190b383f232847267b51fa8633b08)) by @dependabot[bot] in [#17](https://github.com/engeir/lytter/pull/17)
+- **(deps)** Bump fastapi from 0.96.1 to 0.109.1 (#16) - ([2470271](2470271da2232fbf62f5725fcd45d6a14cd833a3)) by @dependabot[bot] in [#16](https://github.com/engeir/lytter/pull/16)
+- **(deps)** Bump starlette from 0.27.0 to 0.36.2 (#15) - ([6c620a5](6c620a5f8a24523c958eef0270e2c6e06140a5c9)) by @dependabot[bot] in [#15](https://github.com/engeir/lytter/pull/15)
+- **(deps)** Bump gunicorn from 20.1.0 to 22.0.0 (#14) - ([1a42f47](1a42f47a88936db48e5fc7625da92041533c36f1)) by @dependabot[bot] in [#14](https://github.com/engeir/lytter/pull/14)
 
-* **github:** set up docker publish workflow ([c95850f](https://github.com/engeir/lastfm-stats/commit/c95850f7c270761660b71106bc94e7e43a180c01))
+### Ci
 
-## [0.2.0](https://github.com/engeir/lastfm-stats/compare/v0.1.0...v0.2.0) (2024-01-30)
+- **(cliff)** Use git cliff instead of release-please - ([b8c14cf](b8c14cf3639b1a14d019d0c0e19336711358551e)) by @engeir
+- **(git-cliff)** Fix action version - ([b071fb6](b071fb601f40b8a0abcbef867c61d443a1108c75)) by @engeir
+- Revert previous commit - ([e0a3c82](e0a3c8285306d95eba3e51d7f8c24170351872da)) by @engeir
+- Update token permissions and use across workflow - ([83c8a92](83c8a923839bc2bdeae521d8a9fe1a817963c303)) by @engeir
+- Update tokens in release workflow - ([4349db2](4349db2470fdebb22a5fa839a192328a5b53ba0f)) by @engeir
 
-
-### Features
-
-* **now_playing:** add lots of info conditionally its playing ([b623444](https://github.com/engeir/lastfm-stats/commit/b623444b6af35cf5d43dcff8f89f910c0dffe94f))
-
-
-### Miscellaneous
-
-* add downloads script ([c1cfe75](https://github.com/engeir/lastfm-stats/commit/c1cfe7505efe7432dd480f826811083ff1837d15))
-
-
-### Continuous Integration
-
-* **github:** create releases with bot account ([cf8464b](https://github.com/engeir/lastfm-stats/commit/cf8464b02acd44da557d2284414a86818c4fe783))
-
-
-### Documentation
-
-* add links to README ([c1cfe75](https://github.com/engeir/lastfm-stats/commit/c1cfe7505efe7432dd480f826811083ff1837d15))
-
-## 0.1.0 (2023-12-22)
-
-
-### Features
-
-* **reflex:** first successful "now playing" button ([c0334e4](https://github.com/engeir/lastfm-stats/commit/c0334e41bd3a8a2537433258a04b93a9fa9c77a9))
-
-
-### Miscellaneous
-
-* initial commit ([ca73d8d](https://github.com/engeir/lastfm-stats/commit/ca73d8dac3822e0ca9b2ce06387022b6c5035876))
-* **now playing:** clean up code and move into reflex page ([7e368c2](https://github.com/engeir/lastfm-stats/commit/7e368c2db40c5db87f0d8ba93a8de5e2c9741053))
-* small change ([fea670d](https://github.com/engeir/lastfm-stats/commit/fea670d9106d96faa26d1ae09000b703e2a5c69c))
-
-
-### Build System
-
-* **deps-dev:** add some types and stuff ([cafa68a](https://github.com/engeir/lastfm-stats/commit/cafa68adfae6ddf5182f875abba1d1bb65fdf8b4))
+<!-- generated by git-cliff -->

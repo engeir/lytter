@@ -2,6 +2,7 @@
 
 ### Bug Fixes
 
+- **(ci)** Correct action name and prevent duplicate PR creation after merge - ([75192d9](75192d9b9859add50562675da0e71698c7aaf642)) by @engeir
 - **(ci)** Use RELEASE_TOKEN for han-eirik user attribution - ([d6be960](d6be960136eac77c448e3b1831ac056d62a28a15)) by @engeir
 - **(ci)** Remove release label requirement from PR creation - ([4b13221](4b13221c9e3eddc6e656c5d370c21d6901852b19)) by @engeir
 - **(ci)** Use mise to run git-cliff instead of Docker action - ([e063e16](e063e169bb3d7e2ca46724d788b4f43b35d165cc)) by @engeir

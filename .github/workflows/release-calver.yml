@@ -46,28 +46,30 @@ jobs:
         id: calver
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          # Generate CalVer tag: YYYY.MINOR.PATCH
+          # Generate CalVer tag: YYYY.MM.MICRO
           YEAR=$(date +%Y)
+          MONTH=$(date +%-m)  # %-m gives month without leading zero (1-12)
           LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
 
-          # Extract year, minor, patch from latest tag
+          # Extract year, month, micro from latest tag
           if [[ $LATEST_TAG =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             TAG_YEAR="${BASH_REMATCH[1]}"
-            TAG_MINOR="${BASH_REMATCH[2]}"
-            TAG_PATCH="${BASH_REMATCH[3]}"
+            TAG_MONTH="${BASH_REMATCH[2]}"
+            TAG_MICRO="${BASH_REMATCH[3]}"
           else
-            TAG_YEAR="$YEAR"
-            TAG_MINOR="0"
-            TAG_PATCH="0"
+            # No valid tag found, start fresh
+            TAG_YEAR="0"
+            TAG_MONTH="0"
+            TAG_MICRO="0"
           fi
 
-          # If year changed, reset minor to 1
-          if [ "$TAG_YEAR" != "$YEAR" ]; then
-            NEW_TAG="$YEAR.1.0"
+          # If year or month changed, reset micro to 1
+          if [ "$TAG_YEAR" != "$YEAR" ] || [ "$TAG_MONTH" != "$MONTH" ]; then
+            NEW_TAG="$YEAR.$MONTH.1"
           else
-            # Increment minor version
-            NEW_MINOR=$((TAG_MINOR + 1))
-            NEW_TAG="$YEAR.$NEW_MINOR.0"
+            # Same year and month, increment micro
+            NEW_MICRO=$((TAG_MICRO + 1))
+            NEW_TAG="$YEAR.$MONTH.$NEW_MICRO"
           fi
 
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT

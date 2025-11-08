@@ -11,7 +11,15 @@ All notable changes to this project will be documented in this file.\n
 # https://keats.github.io/tera/docs/#introduction
 body = """
 {% if version %}\
-    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% if previous %}\
+        {% if previous.version %}\
+            ## [{{ version | trim_start_matches(pat="v") }}](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/compare/{{ previous.version }}..{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+        {% else %}\
+            ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+        {% endif %}\
+    {% else %}\
+        ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% endif %}\
 {% else %}\
     ## [unreleased]
 {% endif %}\

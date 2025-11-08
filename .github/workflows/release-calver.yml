@@ -16,6 +16,10 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
       - name: Get latest tag
         id: get_tag
         run: |
@@ -70,13 +74,12 @@ jobs:
       - name: Generate changelog with git-cliff
         id: changelog
         if: steps.check_changes.outputs.has_changes == 'true'
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --verbose --unreleased --strip header
-        env:
-          OUTPUT: CHANGELOG.md
-          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          # Generate changelog for unreleased changes
+          CHANGELOG=$(mise x -- git-cliff --unreleased --strip header)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
       - name: Check if release PR exists
         id: check_pr
         if: steps.check_changes.outputs.has_changes == 'true'

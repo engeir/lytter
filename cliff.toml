@@ -22,8 +22,8 @@ body = """
     | sort(attribute="scope") %}
         - **({{commit.scope}})** {% if commit.breaking %}[**breaking**] {% endif %}\
             {{ commit.message | upper_first }} - ([{{ commit.id | truncate(length=7, end="") }}]({{ commit.id }}))\
-            {% if commit.github.username %} by @{{ commit.github.username }}{%- endif %}\
-            {% if commit.github.pr_number %} in [#{{ commit.github.pr_number }}](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/pull/{{ commit.github.pr_number }}){%- endif %}
+            {% if commit.remote.username %} by @{{ commit.remote.username }}{%- endif %}\
+            {% if commit.remote.pr_number %} in [#{{ commit.remote.pr_number }}](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/pull/{{ commit.remote.pr_number }}){%- endif %}
     {%- endfor -%}
     {% raw %}\n{% endraw %}\
     {%- for commit in commits %}
@@ -31,8 +31,8 @@ body = """
         {% else -%}
             - {% if commit.breaking %}[**breaking**] {% endif %}\
                 {{ commit.message | upper_first }} - ([{{ commit.id | truncate(length=7, end="") }}]({{ commit.id }}))\
-                {% if commit.github.username %} by @{{ commit.github.username }}{%- endif %}\
-                {% if commit.github.pr_number %} in [#{{ commit.github.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.github.pr_number }}){%- endif %}
+                {% if commit.remote.username %} by @{{ commit.remote.username }}{%- endif %}\
+                {% if commit.remote.pr_number %} in [#{{ commit.remote.pr_number }}](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/pull/{{ commit.remote.pr_number }}){%- endif %}
         {% endif -%}
     {% endfor -%}
 {% endfor %}\n

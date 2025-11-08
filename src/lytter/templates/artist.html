@@ -73,7 +73,7 @@
 {% block scripts %}
 <script>
     const historyData = {{ history_chart|safe }};
-    const artistName = "{{ artist_name }}";
+    const artistName = {{ artist_name|tojson }};
 
     // Plot listening history
     Plotly.newPlot('history-chart', historyData.data, historyData.layout);

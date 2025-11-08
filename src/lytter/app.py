@@ -6,6 +6,7 @@ import os
 import sqlite3
 from collections import Counter, OrderedDict
 from pathlib import Path
+from urllib.parse import quote
 
 import pylast
 import requests
@@ -52,6 +53,10 @@ app = FastAPI(
 
 # Setup templates and static files
 templates = Jinja2Templates(directory=str(_PKG_DIR / "templates"))
+
+# Add custom Jinja2 filter for URL encoding
+templates.env.filters["urlencode"] = lambda s: quote(str(s), safe="")
+
 app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="static")
 
 # Constants

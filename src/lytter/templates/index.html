@@ -20,7 +20,7 @@
                     <strong>{{ current_track.title }}</strong><br>
                     <small>from {{ current_track.album }}</small>
                 </p>
-                <a href="/artist/{{ current_track.artist }}" class="btn btn-primary btn-sm">View Artist Stats</a>
+                <a href="/artist/{{ current_track.artist|urlencode }}" class="btn btn-primary btn-sm">View Artist Stats</a>
             </div>
         </div>
     </div>

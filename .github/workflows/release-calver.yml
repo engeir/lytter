@@ -78,8 +78,12 @@ jobs:
         id: changelog
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          # Generate changelog for unreleased changes
-          CHANGELOG=$(mise x -- git-cliff --unreleased --strip header)
+          # Generate changelog for unreleased changes with the new version tag
+          NEW_VERSION="${{ steps.calver.outputs.new_tag }}"
+          LATEST_TAG="${{ steps.get_tag.outputs.latest_tag }}"
+
+          # Generate changelog from last tag to HEAD, using the new version
+          CHANGELOG=$(mise x -- git-cliff --tag "$NEW_VERSION" --strip header "$LATEST_TAG..HEAD")
           echo "content<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT

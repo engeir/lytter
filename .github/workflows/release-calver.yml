@@ -120,9 +120,8 @@ jobs:
           # pyproject.toml - Python project version (single source of truth)
           sed -i "s/^version[[:space:]]*=.*/version = \"$NEW_VERSION\"/" pyproject.toml
 
-          # Examples of additional files you can update:
           # README.md - Update example Docker version
-          # sed -i "s|ghcr.io/engeir/lytter:[0-9]\+\.[0-9]\+\.[0-9]\+|ghcr.io/engeir/lytter:$NEW_VERSION|g" README.md
+          sed -i "s|ghcr.io/engeir/lytter:[0-9]\+\.[0-9]\+\.[0-9]\+|ghcr.io/engeir/lytter:$NEW_VERSION|g" README.md
 
           # .env.example - If you have a VERSION variable
           # sed -i "s/^VERSION=.*/VERSION=$NEW_VERSION/" .env.example

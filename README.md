@@ -35,7 +35,7 @@ docker run -d \
   --env-file .env \
   ghcr.io/engeir/lytter:latest
 
-# Or specific version (e.g., 2025.11.1 = Nov 2025, 1st release)
+# Or specific version
 docker pull ghcr.io/engeir/lytter:2025.11.1
 ```
 

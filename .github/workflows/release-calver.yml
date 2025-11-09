@@ -113,9 +113,22 @@ jobs:
           # Create or update release-please branch
           git checkout -B release-please
 
-          # Update pyproject.toml version
+          # Update version numbers across project files
+          # To add a new file for version updates, just add a new sed line below
           NEW_VERSION="${{ steps.calver.outputs.new_tag }}"
-          sed -i "s/^version = .*/version = \"$NEW_VERSION\"/" pyproject.toml
+
+          # pyproject.toml - Python project version (single source of truth)
+          sed -i "s/^version[[:space:]]*=.*/version = \"$NEW_VERSION\"/" pyproject.toml
+
+          # Examples of additional files you can update:
+          # README.md - Update example Docker version
+          # sed -i "s|ghcr.io/engeir/lytter:[0-9]\+\.[0-9]\+\.[0-9]\+|ghcr.io/engeir/lytter:$NEW_VERSION|g" README.md
+
+          # .env.example - If you have a VERSION variable
+          # sed -i "s/^VERSION=.*/VERSION=$NEW_VERSION/" .env.example
+
+          # docs/config.yml - If you have docs with version
+          # sed -i "s/^version:.*/version: $NEW_VERSION/" docs/config.yml
 
           # Update CHANGELOG.md - prepend new release to existing changelog
           NEW_CHANGELOG='${{ steps.changelog.outputs.content }}'
@@ -140,6 +153,7 @@ jobs:
             } > CHANGELOG.md
           fi
 
+          # Stage all updated files (add more files here if you add version updates above)
           git add pyproject.toml CHANGELOG.md
           git diff --staged --quiet || git commit -m "chore(release): prepare release $NEW_VERSION"
 
@@ -188,7 +202,9 @@ jobs:
   # This job runs when the release PR is merged
   create-release:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'chore(release):')
+    if:
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      contains(github.event.head_commit.message, 'chore(release):')
     steps:
       - name: Checkout
         uses: actions/checkout@v4

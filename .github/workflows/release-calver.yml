@@ -13,12 +13,12 @@ jobs:
     if: "!contains(github.event.head_commit.message, 'chore(release):')"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
       - name: Install mise
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
         with:
           install: true
       - name: Get latest tag
@@ -206,7 +206,7 @@ jobs:
       contains(github.event.head_commit.message, 'chore(release):')
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           fetch-depth: 0
       - name: Extract version from commit
@@ -238,7 +238,7 @@ jobs:
             echo "changelog=Release ${{ steps.extract_version.outputs.version }}" >> $GITHUB_OUTPUT
           fi
       - name: Create GitHub Release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
         with:
           tag: ${{ steps.extract_version.outputs.version }}
           name: Release ${{ steps.extract_version.outputs.version }}

@@ -4,6 +4,7 @@ import datetime
 import json
 import os
 import sqlite3
+import unicodedata
 from collections import Counter, OrderedDict
 from pathlib import Path
 from urllib.parse import quote
@@ -61,6 +62,35 @@ app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="stat
 
 # Constants
 CONSECUTIVE_SCROBBLES_THRESHOLD = 50
+
+
+def normalize_text(text: str) -> str:
+    """Normalize Unicode text by removing accents and diacritics.
+
+    This allows searching for "u" to match "ü", "Lut" to match "Lüt", etc.
+    Uses NFD (Canonical Decomposition) + filtering of combining characters.
+
+    Parameters
+    ----------
+    text : str
+        Text to normalize
+
+    Returns
+    -------
+    str
+        Normalized text with accents removed
+
+    Examples
+    --------
+    >>> normalize_text("Lüt")
+    'Lut'
+    >>> normalize_text("café")
+    'cafe'
+    """
+    # NFD = Canonical Decomposition (e.g., "ü" -> "u" + combining diaeresis)
+    nfd = unicodedata.normalize("NFD", text)
+    # Remove combining characters (accents, diacritics, etc.)
+    return "".join(char for char in nfd if unicodedata.category(char) != "Mn")
 
 
 # Database helper functions
@@ -670,7 +700,9 @@ async def artist_top_albums(artist: str):
 
 @app.get("/api/search/artists")
 async def search_artists(q: str = "", limit: int = 10) -> dict:
-    """Search artists with fuzzy matching using rapidfuzz.
+    """Search artists with fuzzy matching and Unicode normalization.
+
+    Uses rapidfuzz for fuzzy matching and Unicode normalization for accent-insensitive search.
 
     Parameters
     ----------
@@ -704,14 +736,20 @@ async def search_artists(q: str = "", limit: int = 10) -> dict:
     if not all_artists:
         return {"results": []}
 
+    # Normalize query for accent-insensitive matching (ü -> u, é -> e, etc.)
     q_lower = q.lower()
+    q_normalized = normalize_text(q_lower)
 
     # Combine multiple matching strategies for best results
     results_dict = {}
 
-    # Strategy 1: Exact substring match (case-insensitive) - highest priority
+    # Strategy 1: Exact substring match (case-insensitive + accent-insensitive)
     for artist, plays in all_artists.items():
-        if q_lower in artist.lower():
+        artist_lower = artist.lower()
+        artist_normalized = normalize_text(artist_lower)
+
+        # Check both regular and normalized versions for maximum compatibility
+        if q_lower in artist_lower or q_normalized in artist_normalized:
             # Perfect substring match gets 100 similarity
             results_dict[artist] = {
                 "artist": artist,

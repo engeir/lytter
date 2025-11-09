@@ -2,5 +2,6 @@
 '_'.python.venv = { path = ".venv", create = true }
 
 [tools]
-hk  = "latest"
+hk = "latest"
+pinact = "latest"
 pkl = "latest"

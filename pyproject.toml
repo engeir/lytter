@@ -1,11 +1,12 @@
 [project]
-name = "lytter"
-version = "2025.11.5"
-description = "Last.fm statistics application"
-authors = [{ name = "Eirik Rolland Enger", email = "engeir@pm.me" }]
-license = "MIT"
-readme = "README.md"
-requires-python = ">=3.12,<3.14"
+authors         = [{ name = "Eirik Rolland Enger", email = "engeir@pm.me" }]
+description     = "Last.fm statistics application"
+license         = "MIT"
+name            = "lytter"
+readme          = "README.md"
+requires-python = ">=3.12"
+version         = "2025.11.5"
+
 dependencies = [
   "fastapi>=0.104.1",
   "uvicorn[standard]>=0.24.0",
@@ -22,26 +23,24 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+build-backend = "uv_build"
+requires      = ["uv_build>=0.9.8,<0.10.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lytter"]
 
 [project.scripts]
-lytter = "lytter.app:main"
-lytter-update = "lytter.update_db:main"
-lytter-cron = "lytter.cron_updater:main"
+lytter            = "lytter.app:main"
 lytter-background = "lytter.background_updater:main"
-lytter-status = "lytter.db_status:main"
-lytter-gaps = "lytter.gap_checker:main"
+lytter-cron       = "lytter.cron_updater:main"
+lytter-gaps       = "lytter.gap_checker:main"
+lytter-status     = "lytter.db_status:main"
+lytter-update     = "lytter.update_db:main"
 
 [dependency-groups]
 dev = [
   "types-requests>=2.32.0.20240914",
   "mypy>=1.8.0",
-  "pre-commit>=3.6.2",
-  "pre-commit-hooks>=4.5.0",
   "pydoclint>=0.4.1",
   "pydocstringformatter>=0.7.3",
   "pytest>=8.0.1",
@@ -55,21 +54,21 @@ dev = [
 ]
 
 [tool.mypy]
-files = ["src", "tests"]
+allow_redefinition     = false
+check_untyped_defs     = true
+files                  = ["src", "tests"]
+ignore_errors          = false
 ignore_missing_imports = true
-allow_redefinition = false
-check_untyped_defs = true
-ignore_errors = false
-implicit_reexport = false
-local_partial_types = true
-no_implicit_optional = true
-strict_equality = true
-strict_optional = true
-warn_no_return = true
-warn_redundant_casts = true
-warn_unreachable = true
-warn_unused_configs = true
-warn_unused_ignores = true
+implicit_reexport      = false
+local_partial_types    = true
+no_implicit_optional   = true
+strict_equality        = true
+strict_optional        = true
+warn_no_return         = true
+warn_redundant_casts   = true
+warn_unreachable       = true
+warn_unused_configs    = true
+warn_unused_ignores    = true
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -104,7 +103,7 @@ line-length = 88
 target-version = "py311"
 
 [tool.ruff.lint]
-per-file-ignores = {"src/lytter/app.py" = ["PLR0912", "PLR0915"]}
+per-file-ignores = { "src/lytter/app.py" = ["PLR0912", "PLR0915"] }
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
@@ -143,11 +142,11 @@ ignore = [
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
+fixable   = ["ALL"]
 unfixable = []
 
 [tool.ruff.lint.pydocstyle]
-convention = "numpy"
+convention        = "numpy"
 ignore-decorators = ["typing.overload"]
 
 [tool.ruff.lint.flake8-quotes]
@@ -157,26 +156,26 @@ docstring-quotes = "double"
 [tool.ruff.lint.flake8-import-conventions.aliases]
 # Declare the default aliases.
 "matplotlib.pyplot" = "plt"
-numpy = "np"
-scipy = "sp"
-xarray = "xr"
+numpy               = "np"
+scipy               = "sp"
+xarray              = "xr"
 
 [tool.ruff.lint.isort]
-order-by-type = true
 case-sensitive = true
+order-by-type  = true
 
 [tool.lint.isort]
-multi_line_output = 3
+combine_as_imports     = true
+force_grid_wrap        = 0
 include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-line_length = 88
-profile = "black"
-combine_as_imports = true
+line_length            = 88
+multi_line_output      = 3
+profile                = "black"
+use_parentheses        = true
 
 [tool.pydocstringformatter]
-write = true
-strip-whitespaces = true
-split-summary-body = true
 numpydoc-section-hyphen-length = true
-style = ["pep257", "numpydoc"]
+split-summary-body             = true
+strip-whitespaces              = true
+style                          = ["pep257", "numpydoc"]
+write                          = true

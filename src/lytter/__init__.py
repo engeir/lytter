@@ -1,3 +1,5 @@
 """Lytter - Last.fm statistics application."""
 
-__version__ = "0.3.7"
+from importlib.metadata import version
+
+__version__ = version(__package__)

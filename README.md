@@ -1,6 +1,7 @@
 # lytter
 
-Last.fm statistics dashboard built with FastAPI. Tracks scrobbles, displays listening history, and generates music stats with Plotly visualizations.
+Last.fm statistics dashboard built with FastAPI. Tracks scrobbles, displays listening
+history, and generates music stats with Plotly visualizations.
 
 ## Quick Start
 
@@ -57,7 +58,8 @@ mise run dp   # Push to registry
 ```
 
 > To push to the GitHub container registry, create a PAT with read, write, delete
-> package rights, then export the token and login, as described [here](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic).
+> package rights, then export the token and login, as described
+> [here](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic).
 
 ## Configuration
 

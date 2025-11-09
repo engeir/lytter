@@ -1,11 +1,11 @@
 [project]
-authors         = [{ name = "Eirik Rolland Enger", email = "engeir@pm.me" }]
-description     = "Last.fm statistics application"
-license         = "MIT"
-name            = "lytter"
-readme          = "README.md"
+authors = [{ name = "Eirik Rolland Enger", email = "engeir@pm.me" }]
+description = "Last.fm statistics application"
+license = "MIT"
+name = "lytter"
+readme = "README.md"
 requires-python = ">=3.12"
-version         = "2025.11.5"
+version = "2025.11.5"
 
 dependencies = [
   "fastapi>=0.104.1",
@@ -24,18 +24,18 @@ dependencies = [
 
 [build-system]
 build-backend = "uv_build"
-requires      = ["uv_build>=0.9.8,<0.10.0"]
+requires = ["uv_build>=0.9.8,<0.10.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lytter"]
 
 [project.scripts]
-lytter            = "lytter.app:main"
+lytter = "lytter.app:main"
 lytter-background = "lytter.background_updater:main"
-lytter-cron       = "lytter.cron_updater:main"
-lytter-gaps       = "lytter.gap_checker:main"
-lytter-status     = "lytter.db_status:main"
-lytter-update     = "lytter.update_db:main"
+lytter-cron = "lytter.cron_updater:main"
+lytter-gaps = "lytter.gap_checker:main"
+lytter-status = "lytter.db_status:main"
+lytter-update = "lytter.update_db:main"
 
 [dependency-groups]
 dev = [
@@ -54,21 +54,21 @@ dev = [
 ]
 
 [tool.mypy]
-allow_redefinition     = false
-check_untyped_defs     = true
-files                  = ["src", "tests"]
-ignore_errors          = false
+allow_redefinition = false
+check_untyped_defs = true
+files = ["src", "tests"]
+ignore_errors = false
 ignore_missing_imports = true
-implicit_reexport      = false
-local_partial_types    = true
-no_implicit_optional   = true
-strict_equality        = true
-strict_optional        = true
-warn_no_return         = true
-warn_redundant_casts   = true
-warn_unreachable       = true
-warn_unused_configs    = true
-warn_unused_ignores    = true
+implicit_reexport = false
+local_partial_types = true
+no_implicit_optional = true
+strict_equality = true
+strict_optional = true
+warn_no_return = true
+warn_redundant_casts = true
+warn_unreachable = true
+warn_unused_configs = true
+warn_unused_ignores = true
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -142,11 +142,11 @@ ignore = [
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
-fixable   = ["ALL"]
+fixable = ["ALL"]
 unfixable = []
 
 [tool.ruff.lint.pydocstyle]
-convention        = "numpy"
+convention = "numpy"
 ignore-decorators = ["typing.overload"]
 
 [tool.ruff.lint.flake8-quotes]
@@ -156,26 +156,26 @@ docstring-quotes = "double"
 [tool.ruff.lint.flake8-import-conventions.aliases]
 # Declare the default aliases.
 "matplotlib.pyplot" = "plt"
-numpy               = "np"
-scipy               = "sp"
-xarray              = "xr"
+numpy = "np"
+scipy = "sp"
+xarray = "xr"
 
 [tool.ruff.lint.isort]
 case-sensitive = true
-order-by-type  = true
+order-by-type = true
 
 [tool.lint.isort]
-combine_as_imports     = true
-force_grid_wrap        = 0
+combine_as_imports = true
+force_grid_wrap = 0
 include_trailing_comma = true
-line_length            = 88
-multi_line_output      = 3
-profile                = "black"
-use_parentheses        = true
+line_length = 88
+multi_line_output = 3
+profile = "black"
+use_parentheses = true
 
 [tool.pydocstringformatter]
 numpydoc-section-hyphen-length = true
-split-summary-body             = true
-strip-whitespaces              = true
-style                          = ["pep257", "numpydoc"]
-write                          = true
+split-summary-body = true
+strip-whitespaces = true
+style = ["pep257", "numpydoc"]
+write = true

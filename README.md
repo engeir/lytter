@@ -17,9 +17,7 @@ mise run r  # or: uv run lytter
 # Access at http://localhost:8000
 
 # Code quality
-ruff check src/
-uv run mypy src/
-uv run pre-commit run --all-files
+hk fix
 ```
 
 ### Production (Docker)
@@ -71,7 +69,6 @@ API_SECRET=your_lastfm_api_secret
 USER_NAME=your_lastfm_username
 PASSWORD=your_lastfm_password
 GENIUS_TOKEN=your_genius_api_token  # optional, for lyrics
-UPDATE_PASSWORD=password_for_db_updates
 ```
 
 ## Architecture

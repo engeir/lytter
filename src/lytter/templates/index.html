@@ -148,31 +148,31 @@ if (typeof Plotly === 'undefined') {
                     <div class="col-md-6">
                         <h6 class="mb-3" style="color: #58a6ff;">Past Week</h6>
                         <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Artists</h6>
-                        <ol class="mb-3 ps-3" style="font-size: 0.9rem; color: #f0f6fc;">
-                            ${data.week_artists.map(a => `<li>${a.artist} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        <ol class="mb-3 ps-3" style="font-size: 0.9rem;">
+                            ${data.week_artists.map(a => `<li><a href="/artist/${encodeURIComponent(a.artist)}" class="text-decoration-none" style="color: #f0f6fc;">${a.artist}</a> <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
                         </ol>
                         <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Albums</h6>
-                        <ol class="mb-3 ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
-                            ${data.week_albums.map(a => `<li>${a.artist} - ${a.album} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        <ol class="mb-3 ps-3" style="font-size: 0.85rem;">
+                            ${data.week_albums.map(a => `<li><a href="/artist/${encodeURIComponent(a.artist)}" class="text-decoration-none" style="color: #f0f6fc;">${a.artist}</a> - <a href="/album/${encodeURIComponent(a.artist)}/${encodeURIComponent(a.album)}" class="text-decoration-none" style="color: #f0f6fc;">${a.album}</a> <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
                         </ol>
                         <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Songs</h6>
-                        <ol class="ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
-                            ${data.week_songs.map(s => `<li>${s.artist} - ${s.track} <span style="color: #8b949e;">(${s.plays})</span></li>`).join('')}
+                        <ol class="ps-3" style="font-size: 0.85rem;">
+                            ${data.week_songs.map(s => `<li><a href="/artist/${encodeURIComponent(s.artist)}" class="text-decoration-none" style="color: #f0f6fc;">${s.artist}</a> - <a href="/song/${encodeURIComponent(s.artist)}/${encodeURIComponent(s.track)}" class="text-decoration-none" style="color: #f0f6fc;">${s.track}</a> <span style="color: #8b949e;">(${s.plays})</span></li>`).join('')}
                         </ol>
                     </div>
                     <div class="col-md-6">
                         <h6 class="mb-3" style="color: #58a6ff;">Past Month</h6>
                         <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Artists</h6>
-                        <ol class="mb-3 ps-3" style="font-size: 0.9rem; color: #f0f6fc;">
-                            ${data.month_artists.map(a => `<li>${a.artist} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        <ol class="mb-3 ps-3" style="font-size: 0.9rem;">
+                            ${data.month_artists.map(a => `<li><a href="/artist/${encodeURIComponent(a.artist)}" class="text-decoration-none" style="color: #f0f6fc;">${a.artist}</a> <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
                         </ol>
                         <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Albums</h6>
-                        <ol class="mb-3 ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
-                            ${data.month_albums.map(a => `<li>${a.artist} - ${a.album} <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
+                        <ol class="mb-3 ps-3" style="font-size: 0.85rem;">
+                            ${data.month_albums.map(a => `<li><a href="/artist/${encodeURIComponent(a.artist)}" class="text-decoration-none" style="color: #f0f6fc;">${a.artist}</a> - <a href="/album/${encodeURIComponent(a.artist)}/${encodeURIComponent(a.album)}" class="text-decoration-none" style="color: #f0f6fc;">${a.album}</a> <span style="color: #8b949e;">(${a.plays})</span></li>`).join('')}
                         </ol>
                         <h6 class="mb-2" style="font-size: 0.9rem; color: #f0f6fc;">Top Songs</h6>
-                        <ol class="ps-3" style="font-size: 0.85rem; color: #f0f6fc;">
-                            ${data.month_songs.map(s => `<li>${s.artist} - ${s.track} <span style="color: #8b949e;">(${s.plays})</span></li>`).join('')}
+                        <ol class="ps-3" style="font-size: 0.85rem;">
+                            ${data.month_songs.map(s => `<li><a href="/artist/${encodeURIComponent(s.artist)}" class="text-decoration-none" style="color: #f0f6fc;">${s.artist}</a> - <a href="/song/${encodeURIComponent(s.artist)}/${encodeURIComponent(s.track)}" class="text-decoration-none" style="color: #f0f6fc;">${s.track}</a> <span style="color: #8b949e;">(${s.plays})</span></li>`).join('')}
                         </ol>
                     </div>
                 </div>

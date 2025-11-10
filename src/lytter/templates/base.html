@@ -71,8 +71,20 @@
             color: #79c0ff;
         }
         /* Fix breadcrumb */
+        .breadcrumb {
+            background-color: transparent;
+        }
+        .breadcrumb-item {
+            color: #f0f6fc;
+        }
         .breadcrumb-item a {
             color: #58a6ff;
+        }
+        .breadcrumb-item.active {
+            color: #8b949e;
+        }
+        .breadcrumb-item + .breadcrumb-item::before {
+            color: #8b949e;
         }
         /* Ensure chart containers have minimum height */
         #timeline-chart, #artists-chart {

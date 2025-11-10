@@ -22,12 +22,24 @@
     }
     
     .nav-tabs .nav-link.active {
-        color: #0d1117;
-        background-color: #58a6ff;
-        border-color: #58a6ff;
+        color: #0d1117 !important;
+        background-color: #58a6ff !important;
+        border-color: #58a6ff !important;
+    }
+    
+    /* Fix active tab hover - keep dark text on blue background */
+    .nav-tabs .nav-link.active:hover {
+        color: #0d1117 !important;
+        background-color: #388bfd !important;
+        border-color: #388bfd !important;
     }
     
     .tab-content {
+        color: #f0f6fc;
+    }
+    
+    /* Fix form label colors */
+    .form-label {
         color: #f0f6fc;
     }
 </style>

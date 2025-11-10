@@ -11,15 +11,15 @@ local linters = new Mapping<String, Step> {
     ["mypy"] = Builtins.mypy
     ["pydoclint"] {
         glob = "*py"
-        check = "pydoclint {{files}} >/dev/null 2>&1"
+        check = "pydoclint {{files}} >/dev/null"
     }
     ["pydocstringformatter"] {
         glob = "*py"
-        check = "pydocstringformatter {{files}} >/dev/null 2>&1"
+        check = "pydocstringformatter {{files}} >/dev/null"
     }
     ["xdoctest"] {
         glob = "*py"
-        check = "xdoctest {{files}} >/dev/null 2>&1"
+        check = "xdoctest {{files}} >/dev/null"
     }
     ["pkl"] {
         glob = "*.pkl"

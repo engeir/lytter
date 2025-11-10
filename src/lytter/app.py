@@ -698,6 +698,166 @@ async def artist_top_albums(artist: str):
     return {"albums": albums}
 
 
+@app.get("/album/{artist_name}/{album_name}", response_class=HTMLResponse)
+async def album_stats(request: Request, artist_name: str, album_name: str):
+    """Album statistics page."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get album stats
+    cursor.execute(
+        "SELECT COUNT(*) FROM musiclibrary WHERE artist = ? AND album = ?",
+        (artist_name, album_name),
+    )
+    total_plays = cursor.fetchone()[0]
+
+    cursor.execute(
+        "SELECT COUNT(DISTINCT track) FROM musiclibrary WHERE artist = ? AND album = ?",
+        (artist_name, album_name),
+    )
+    unique_tracks = cursor.fetchone()[0]
+
+    # Get listening history
+    cursor.execute(
+        """
+        SELECT timestamp FROM musiclibrary
+        WHERE artist = ? AND album = ?
+        ORDER BY timestamp
+    """,
+        (artist_name, album_name),
+    )
+    timestamps = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
+    counts = list(range(1, len(dates) + 1))
+
+    fig = px.line(x=dates, y=counts, title="Listening history")
+    fig.update_layout(
+        title_x=0.5,
+        xaxis_title="Time",
+        yaxis_title="Count",
+        showlegend=True,
+        title_font_family="Open Sans",
+        title_font_size=25,
+        paper_bgcolor="#161b22",
+        plot_bgcolor="#161b22",
+        font=dict(color="#f0f6fc"),
+        xaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
+        yaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
+    )
+
+    fig_dict = fig.to_dict()
+    fig_dict["data"][0]["x"] = [d.strftime("%Y-%m-%dT%H:%M:%S") for d in dates]
+    fig_dict["data"][0]["y"] = counts
+    history_json = json.dumps(fig_dict)
+
+    return templates.TemplateResponse(
+        "album.html",
+        {
+            "request": request,
+            "artist_name": artist_name,
+            "album_name": album_name,
+            "total_plays": total_plays,
+            "unique_tracks": unique_tracks,
+            "history_chart": history_json,
+        },
+    )
+
+
+@app.get("/song/{artist_name}/{track_name}", response_class=HTMLResponse)
+async def song_stats(request: Request, artist_name: str, track_name: str):
+    """Song statistics page."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get song stats
+    cursor.execute(
+        "SELECT COUNT(*) FROM musiclibrary WHERE artist = ? AND track = ?",
+        (artist_name, track_name),
+    )
+    total_plays = cursor.fetchone()[0]
+
+    cursor.execute(
+        """
+        SELECT COUNT(DISTINCT album) FROM musiclibrary
+        WHERE artist = ? AND track = ? AND album != ''
+    """,
+        (artist_name, track_name),
+    )
+    unique_albums = cursor.fetchone()[0]
+
+    # Get listening history
+    cursor.execute(
+        """
+        SELECT timestamp FROM musiclibrary
+        WHERE artist = ? AND track = ?
+        ORDER BY timestamp
+    """,
+        (artist_name, track_name),
+    )
+    timestamps = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
+    counts = list(range(1, len(dates) + 1))
+
+    fig = px.line(x=dates, y=counts, title="Listening history")
+    fig.update_layout(
+        title_x=0.5,
+        xaxis_title="Time",
+        yaxis_title="Count",
+        showlegend=True,
+        title_font_family="Open Sans",
+        title_font_size=25,
+        paper_bgcolor="#161b22",
+        plot_bgcolor="#161b22",
+        font=dict(color="#f0f6fc"),
+        xaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
+        yaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
+    )
+
+    fig_dict = fig.to_dict()
+    fig_dict["data"][0]["x"] = [d.strftime("%Y-%m-%dT%H:%M:%S") for d in dates]
+    fig_dict["data"][0]["y"] = counts
+    history_json = json.dumps(fig_dict)
+
+    return templates.TemplateResponse(
+        "song.html",
+        {
+            "request": request,
+            "artist_name": artist_name,
+            "track_name": track_name,
+            "total_plays": total_plays,
+            "unique_albums": unique_albums,
+            "history_chart": history_json,
+        },
+    )
+
+
+@app.get("/album-tracks")
+async def album_tracks(artist: str, album: str):
+    """Get tracks from a specific album."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT track, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE artist = ? AND album = ?
+        GROUP BY track
+        ORDER BY plays DESC
+        LIMIT 100
+    """,
+        (artist, album),
+    )
+    result = cursor.fetchall()
+    conn.close()
+
+    tracks = [{"track": row[0], "plays": row[1]} for row in result]
+    return {"tracks": tracks}
+
+
 @app.get("/api/search/artists")
 async def search_artists(q: str = "", limit: int = 10) -> dict:
     """Search artists with fuzzy matching and Unicode normalization.

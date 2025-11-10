@@ -89,7 +89,7 @@
                 const barWidth = (song.plays / maxPlays) * maxWidthPercent;
 
                 return `<div class="d-flex justify-content-between align-items-center py-3 position-relative" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                    <span class="flex-grow-1 me-3" style="color: #f0f6fc; max-width: 40%; font-size: 0.95rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${song.track}</span>
+                    <a href="/song/${encodeURIComponent(artistName)}/${encodeURIComponent(song.track)}" class="flex-grow-1 me-3 text-decoration-none" style="color: #f0f6fc; max-width: 40%; font-size: 0.95rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${song.track}</a>
                     <div class="d-flex align-items-center flex-grow-1" style="max-width: 60%; justify-content: flex-end;">
                         <div style="
                             width: ${barWidth}%;
@@ -129,7 +129,7 @@
                 const barWidth = (album.plays / maxPlays) * maxWidthPercent;
 
                 return `<div class="d-flex justify-content-between align-items-center py-3 position-relative" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                    <span class="flex-grow-1 me-3" style="color: #f0f6fc; max-width: 40%; font-size: 0.95rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${album.album}</span>
+                    <a href="/album/${encodeURIComponent(artistName)}/${encodeURIComponent(album.album)}" class="flex-grow-1 me-3 text-decoration-none" style="color: #f0f6fc; max-width: 40%; font-size: 0.95rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${album.album}</a>
                     <div class="d-flex align-items-center flex-grow-1" style="max-width: 60%; justify-content: flex-end;">
                         <div style="
                             width: ${barWidth}%;

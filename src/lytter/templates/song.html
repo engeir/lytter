@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}{{ track_name }} - {{ artist_name }} - Last.fm Stats{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="/artist/{{ artist_name|urlencode }}">{{ artist_name }}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ track_name }}</li>
+    </ol>
+</nav>
+
+<h1 class="mb-2">{{ track_name }}</h1>
+<h5 class="text-muted mb-4">by {{ artist_name }}</h5>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Total Plays</h5>
+                <h3 class="text-primary">{{ "{:,}".format(total_plays) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Appears in Albums</h5>
+                <h3 class="text-primary">{{ unique_albums }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listening History</h5>
+                <div id="history-chart" style="min-height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const historyData = {{ history_chart|safe }};
+
+    // Plot listening history
+    Plotly.newPlot('history-chart', historyData.data, historyData.layout);
+</script>
+{% endblock %}

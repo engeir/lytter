@@ -760,7 +760,7 @@ async def search_artists(q: str = "", limit: int = 10) -> dict:
     # Strategy 2: Fuzzy matching for artists not already matched
     remaining_artists = [a for a in all_artists.keys() if a not in results_dict]
     if remaining_artists:
-        matches = process.extract(
+        matches: list[tuple[str, float, int]] = process.extract(
             q,
             remaining_artists,
             scorer=fuzz.WRatio,  # Weighted ratio for fuzzy matches
@@ -786,6 +786,318 @@ async def search_artists(q: str = "", limit: int = 10) -> dict:
 
     # Limit to requested number
     return {"results": results[:limit]}
+
+
+@app.get("/yearly", response_class=HTMLResponse)
+async def yearly_stats(request: Request):
+    """Yearly statistics page with year selector."""
+    # Get available years from database
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DISTINCT strftime('%Y', timestamp, 'unixepoch') as year
+        FROM musiclibrary
+        ORDER BY year DESC
+    """)
+    years = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    return templates.TemplateResponse(
+        "yearly.html",
+        {
+            "request": request,
+            "years": years,
+            "current_year": years[0] if years else None,
+        },
+    )
+
+
+@app.get("/api/yearly/top-items")
+async def yearly_top_items(year: int, limit: int = 20):
+    """Get top songs, albums, and artists for a specific year."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Top songs
+    cursor.execute(
+        """
+        SELECT artist, track, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+        GROUP BY artist, track
+        ORDER BY plays DESC
+        LIMIT ?
+    """,
+        (str(year), limit),
+    )
+    top_songs = [
+        {"artist": row[0], "track": row[1], "plays": row[2]}
+        for row in cursor.fetchall()
+    ]
+
+    # Top albums
+    cursor.execute(
+        """
+        SELECT artist, album, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+            AND album != ''
+        GROUP BY artist, album
+        ORDER BY plays DESC
+        LIMIT ?
+    """,
+        (str(year), limit),
+    )
+    top_albums = [
+        {"artist": row[0], "album": row[1], "plays": row[2]}
+        for row in cursor.fetchall()
+    ]
+
+    # Top artists
+    cursor.execute(
+        """
+        SELECT artist, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+        GROUP BY artist
+        ORDER BY plays DESC
+        LIMIT ?
+    """,
+        (str(year), limit),
+    )
+    top_artists = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
+
+    conn.close()
+
+    return {
+        "songs": top_songs,
+        "albums": top_albums,
+        "artists": top_artists,
+    }
+
+
+@app.get("/api/yearly/time-patterns")
+async def yearly_time_patterns(year: int):
+    """Get listening patterns by hour and day of week for a specific year."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Hour of day pattern (0-23)
+    cursor.execute(
+        """
+        SELECT strftime('%H', timestamp, 'unixepoch') as hour, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+        GROUP BY hour
+        ORDER BY hour
+    """,
+        (str(year),),
+    )
+    hourly = {int(row[0]): row[1] for row in cursor.fetchall()}
+    # Fill in missing hours with 0
+    hourly_data = [hourly.get(h, 0) for h in range(24)]
+
+    # Day of week pattern (0=Monday, 6=Sunday)
+    cursor.execute(
+        """
+        SELECT strftime('%w', timestamp, 'unixepoch') as dow, COUNT(*) as plays
+        FROM musiclibrary
+        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+        GROUP BY dow
+        ORDER BY dow
+    """,
+        (str(year),),
+    )
+    weekly = {int(row[0]): row[1] for row in cursor.fetchall()}
+    # SQLite %w: 0=Sunday, 1=Monday, ..., 6=Saturday
+    # Convert to 0=Monday format
+    day_names = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ]
+    weekly_data = [
+        weekly.get(1, 0),  # Monday
+        weekly.get(2, 0),  # Tuesday
+        weekly.get(3, 0),  # Wednesday
+        weekly.get(4, 0),  # Thursday
+        weekly.get(5, 0),  # Friday
+        weekly.get(6, 0),  # Saturday
+        weekly.get(0, 0),  # Sunday
+    ]
+
+    conn.close()
+
+    return {
+        "hourly": hourly_data,
+        "weekly": weekly_data,
+        "day_names": day_names,
+    }
+
+
+@app.get("/api/yearly/evolution")
+async def yearly_evolution(
+    year: int, item_type: str = "artists", top_n: int = 5
+) -> dict:
+    """Get evolution of items that appeared in monthly top N throughout the year.
+
+    Instead of tracking the top N for the entire year, this finds all items
+    that were in the top N of ANY month, then shows their evolution.
+
+    Parameters
+    ----------
+    year : int
+        Year to analyze
+    item_type : str
+        One of: 'artists', 'albums', 'songs'
+    top_n : int
+        Number of top items per month to track (default: 5)
+
+    Returns
+    -------
+    dict
+        Contains dates, item names, and their play counts over time
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Generate all months in the year
+    all_months = [f"{year}-{month:02d}" for month in range(1, 13)]
+
+    # Collect all unique items that appeared in top N of any month
+    all_top_items = set()
+
+    for month_str in all_months:
+        if item_type == "artists":
+            cursor.execute(
+                """
+                SELECT artist, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
+                GROUP BY artist
+                ORDER BY plays DESC
+                LIMIT ?
+            """,
+                (month_str, top_n),
+            )
+            month_tops = [row[0] for row in cursor.fetchall()]
+        elif item_type == "albums":
+            cursor.execute(
+                """
+                SELECT artist || ' - ' || album as full_album, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
+                    AND album != ''
+                GROUP BY artist, album
+                ORDER BY plays DESC
+                LIMIT ?
+            """,
+                (month_str, top_n),
+            )
+            month_tops = [row[0] for row in cursor.fetchall()]
+        else:  # songs
+            cursor.execute(
+                """
+                SELECT artist || ' - ' || track as full_track, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
+                GROUP BY artist, track
+                ORDER BY plays DESC
+                LIMIT ?
+            """,
+                (month_str, top_n),
+            )
+            month_tops = [row[0] for row in cursor.fetchall()]
+
+        all_top_items.update(month_tops)
+
+    if not all_top_items:
+        conn.close()
+        return {"dates": [], "items": [], "data": []}
+
+    # Get monthly counts for each top item throughout the year
+    evolution_data = {}
+
+    for item in all_top_items:
+        if item_type == "artists":
+            cursor.execute(
+                """
+                SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                    AND artist = ?
+                GROUP BY month
+                ORDER BY month
+            """,
+                (str(year), item),
+            )
+        elif item_type == "albums":
+            # Split back the combined name (format: "Artist - Album")
+            parts = item.split(" - ", 1)
+            expected_parts = 2
+            if len(parts) == expected_parts:
+                artist, album = parts
+                cursor.execute(
+                    """
+                    SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
+                    FROM musiclibrary
+                    WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                        AND artist = ?
+                        AND album = ?
+                    GROUP BY month
+                    ORDER BY month
+                """,
+                    (str(year), artist, album),
+                )
+            else:
+                continue
+        else:  # songs
+            # Split back the combined name (format: "Artist - Track")
+            parts = item.split(" - ", 1)
+            expected_parts = 2
+            if len(parts) == expected_parts:
+                artist, track = parts
+                cursor.execute(
+                    """
+                    SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
+                    FROM musiclibrary
+                    WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                        AND artist = ?
+                        AND track = ?
+                    GROUP BY month
+                    ORDER BY month
+                """,
+                    (str(year), artist, track),
+                )
+            else:
+                continue
+
+        monthly_counts = {row[0]: row[1] for row in cursor.fetchall()}
+        evolution_data[item] = monthly_counts
+
+    conn.close()
+
+    # Generate all months in the year
+    all_months = []
+    for month in range(1, 13):
+        all_months.append(f"{year}-{month:02d}")
+
+    # Get monthly data for each item
+    result_data = {}
+
+    for item in all_top_items:
+        monthly_data = [evolution_data[item].get(month, 0) for month in all_months]
+        result_data[item] = monthly_data
+
+    return {
+        "dates": all_months,
+        "items": list(all_top_items),
+        "data": result_data,
+    }
 
 
 # Removed admin panel and web-based updates

@@ -503,12 +503,12 @@
             return `
                 <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
                     <div class="flex-grow-1" style="min-width: 0;">
-                        <div style="color: #f0f6fc; font-weight: 500; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <a href="/song/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.track)}" class="text-decoration-none" style="color: #f0f6fc; font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             ${index + 1}. ${escapeHtml(song.track)}
-                        </div>
-                        <div style="color: #8b949e; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        </a>
+                        <a href="/artist/${encodeURIComponent(song.artist)}" class="text-decoration-none" style="color: #8b949e; font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             ${escapeHtml(song.artist)}
-                        </div>
+                        </a>
                     </div>
                     <div class="ms-2" style="min-width: 60px; text-align: right;">
                         <span style="color: #58a6ff; font-weight: 600; font-size: 0.9rem;">
@@ -528,12 +528,12 @@
             return `
                 <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
                     <div class="flex-grow-1" style="min-width: 0;">
-                        <div style="color: #f0f6fc; font-weight: 500; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <a href="/album/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.album)}" class="text-decoration-none" style="color: #f0f6fc; font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             ${index + 1}. ${escapeHtml(album.album)}
-                        </div>
-                        <div style="color: #8b949e; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        </a>
+                        <a href="/artist/${encodeURIComponent(album.artist)}" class="text-decoration-none" style="color: #8b949e; font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             ${escapeHtml(album.artist)}
-                        </div>
+                        </a>
                     </div>
                     <div class="ms-2" style="min-width: 60px; text-align: right;">
                         <span style="color: #58a6ff; font-weight: 600; font-size: 0.9rem;">

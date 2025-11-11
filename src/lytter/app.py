@@ -725,7 +725,7 @@ async def artist_top_albums(artist: str):
     return {"albums": albums}
 
 
-@app.get("/album/{artist_name}/{album_name}", response_class=HTMLResponse)
+@app.get("/album/{artist_name}/{album_name:path}", response_class=HTMLResponse)
 async def album_stats(request: Request, artist_name: str, album_name: str):
     """Album statistics page."""
     conn = get_db_connection()
@@ -792,7 +792,7 @@ async def album_stats(request: Request, artist_name: str, album_name: str):
     )
 
 
-@app.get("/song/{artist_name}/{track_name}", response_class=HTMLResponse)
+@app.get("/song/{artist_name}/{track_name:path}", response_class=HTMLResponse)
 async def song_stats(request: Request, artist_name: str, track_name: str):
     """Song statistics page."""
     conn = get_db_connection()

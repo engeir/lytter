@@ -3,24 +3,21 @@
 Last.fm statistics dashboard built with FastAPI. Tracks scrobbles, displays listening
 history, and generates music stats with Plotly visualizations.
 
-## Quick Start
+## Configuration
 
-### Local Development
+Create `.env` with:
 
 ```bash
-# Install dependencies
-mise run i  # or: uv sync
-
-# Run dev server
-mise run r  # or: uv run lytter
-
-# Access at http://localhost:8000
-
-# Code quality
-hk fix
+API_KEY=your_lastfm_api_key
+API_SECRET=your_lastfm_api_secret
+USER_NAME=your_lastfm_username
+PASSWORD=your_lastfm_password
+GENIUS_TOKEN=your_genius_api_token  # optional, for lyrics
 ```
 
-### Production (Docker)
+## Install
+
+### Run with Docker
 
 ```bash
 # Pull and run latest
@@ -43,7 +40,39 @@ Or use docker compose:
 mise run du   # or: docker compose up -d
 ```
 
-### Build & Deploy
+### Database Updates
+
+Set up a cron job to update scrobbles automatically:
+
+```bash
+# Add to crontab (every 15 minutes)
+*/15 * * * * docker exec lytter uv run lytter-cron >> ~/lytter-cron.log 2>&1
+```
+
+Manual update:
+
+```bash
+docker exec lytter uv run lytter-update
+```
+
+## Local Development
+
+### Quick Start
+
+```bash
+# Install dependencies
+mise run i  # or: uv sync
+# Run dev server
+mise run r  # or: uv run lytter
+# Access at http://localhost:8000
+
+# Code quality
+hk fix
+```
+
+### Build & Push to Registry
+
+Deploying new versions with
 
 ```bash
 # Build, tag, and push (all-in-one)
@@ -59,60 +88,19 @@ mise run dp   # Push to registry
 > package rights, then export the token and login, as described
 > [here](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic).
 
-## Configuration
-
-Create `.env` with:
-
-```bash
-API_KEY=your_lastfm_api_key
-API_SECRET=your_lastfm_api_secret
-USER_NAME=your_lastfm_username
-PASSWORD=your_lastfm_password
-GENIUS_TOKEN=your_genius_api_token  # optional, for lyrics
-```
-
-## Architecture
-
-- **Framework**: FastAPI with Jinja2 templates
-- **Database**: SQLite (music.db)
-- **APIs**: Last.fm API (via pylast), Genius API (lyrics)
-- **Visualizations**: Plotly charts
-- **Deployment**: Single Docker container
-- **Structure**: Modern src/ layout
-
-### Project Structure
-
-```
-src/lytter/
-  app.py              - Main FastAPI application
-  update_db.py        - Manual database update script
-  cron_updater.py     - Cron job for scheduled updates
-  background_updater.py - Background scrobble updates
-  db_status.py        - Check database status
-  gap_checker.py      - Find gaps in scrobble history
-  templates/          - Jinja2 HTML templates
-  static/             - Static assets
-```
-
 ### Database Updates
 
 The app fetches scrobbles incrementally (only new ones since last update).
 
-**Using installed scripts:**
-
 ```bash
 # Manual update
 uv run lytter-update
-
 # Background updater (runs continuously)
 uv run lytter-background
-
 # Cron updater
 uv run lytter-cron
-
 # Check status
 uv run lytter-status
-
 # Check for gaps
 uv run lytter-gaps
 ```
@@ -124,23 +112,24 @@ uv run python -m lytter.update_db
 uv run python -m lytter.cron_updater
 ```
 
-**Cron job (on your server):**
+## Architecture
 
-```bash
-# Add to crontab
-*/15 * * * * docker exec lytter uv run lytter-cron >> ~/lytter-cron.log 2>&1
-```
+- **Framework**: FastAPI with Jinja2 templates + HTMX
+- **Database**: SQLite (music.db)
+- **APIs**: Last.fm API (via pylast), Genius API (lyrics)
+- **Visualizations**: Plotly charts
+- **Styling**: Centralized CSS with variables (GitHub Dark theme)
+- **Deployment**: Single Docker container
+- **Structure**: Modern src/ layout with reusable macros
 
-## Deployment
+### Features
 
-The Docker image includes everything needed. Just pull and run on your VPS.
-
-**Workflow:**
-
-1. Build, tag & push: `mise run dbp`
-2. On VPS: `docker pull ghcr.io/engeir/lytter:latest && docker run ...`
-
-**Updates:** Repeat steps 1-2.
+- **Dashboard**: Now playing, listening timeline, recent favorites, top artists
+- **Artist Pages**: Listening history charts, top songs/albums
+- **Album/Song Pages**: Detailed stats with breadcrumb navigation
+- **Yearly Stats**: Time patterns (24h/weekly), top 20 lists, monthly ranking evolution
+- **Search**: Fuzzy artist search with Unicode normalization
+- **HTMX**: Server-side rendering for dynamic content (minimal JavaScript)
 
 ## References
 

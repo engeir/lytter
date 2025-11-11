@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros.html' import stat_card %}
 
 {% block title %}{{ track_name }} - {{ artist_name }} - Last.fm Stats{% endblock %}
 
@@ -16,20 +17,10 @@
 
 <div class="row mb-4">
     <div class="col-md-6">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Total Plays</h5>
-                <h3 class="text-primary">{{ "{:,}".format(total_plays) }}</h3>
-            </div>
-        </div>
+        {{ stat_card("Total Plays", total_plays) }}
     </div>
     <div class="col-md-6">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Appears in Albums</h5>
-                <h3 class="text-primary">{{ unique_albums }}</h3>
-            </div>
-        </div>
+        {{ stat_card("Appears in Albums", unique_albums) }}
     </div>
 </div>
 

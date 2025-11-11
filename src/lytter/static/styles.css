@@ -1,0 +1,378 @@
+/* Last.fm Stats - Centralized Styles */
+
+/* ===== Color Variables (GitHub Dark Theme) ===== */
+:root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --border-color: #30363d;
+    --text-primary: #f0f6fc;
+    --text-secondary: #8b949e;
+    --accent-blue: #58a6ff;
+    --accent-blue-hover: #79c0ff;
+    --accent-blue-dark: #388bfd;
+    --accent-green: #238636;
+    --accent-green-hover: #2ea043;
+}
+
+/* ===== Base Styles ===== */
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+/* ===== Navigation ===== */
+.navbar {
+    background-color: var(--bg-tertiary) !important;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.navbar-brand,
+.nav-link {
+    color: var(--text-primary) !important;
+}
+
+.nav-link:hover {
+    color: var(--accent-blue) !important;
+}
+
+/* ===== Cards ===== */
+.card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.card-title {
+    color: var(--text-primary);
+}
+
+.card-subtitle,
+.card-subtitle.mb-2.text-muted {
+    color: var(--accent-blue) !important;
+}
+
+.card-text,
+.card-text small {
+    color: var(--text-primary) !important;
+}
+
+/* ===== Buttons ===== */
+.btn-primary {
+    background-color: var(--accent-green);
+    border-color: var(--accent-green);
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background-color: var(--accent-green-hover);
+    border-color: var(--accent-green-hover);
+}
+
+/* ===== Text Colors ===== */
+.text-primary {
+    color: var(--accent-blue) !important;
+}
+
+.text-light {
+    color: var(--text-primary) !important;
+}
+
+.text-muted {
+    color: var(--text-secondary) !important;
+}
+
+/* ===== Borders ===== */
+.border-bottom {
+    border-color: var(--border-color) !important;
+}
+
+/* ===== Badges ===== */
+.badge.bg-primary {
+    background-color: var(--accent-blue) !important;
+    color: var(--bg-primary) !important;
+}
+
+/* ===== Links ===== */
+a {
+    color: var(--accent-blue);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--accent-blue-hover);
+}
+
+/* ===== Breadcrumbs ===== */
+.breadcrumb {
+    background-color: transparent;
+}
+
+.breadcrumb-item {
+    color: var(--text-primary);
+}
+
+.breadcrumb-item a {
+    color: var(--accent-blue);
+}
+
+.breadcrumb-item.active {
+    color: var(--text-secondary);
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    color: var(--text-secondary);
+}
+
+/* ===== Charts ===== */
+#timeline-chart,
+#artists-chart,
+#hourly-chart,
+#weekly-chart {
+    min-height: 400px;
+}
+
+#artists-chart {
+    position: relative;
+}
+
+/* ===== Scrollbars ===== */
+.scrollable::-webkit-scrollbar,
+#artists-chart::-webkit-scrollbar,
+#search-results::-webkit-scrollbar {
+    width: 8px;
+}
+
+.scrollable::-webkit-scrollbar-track,
+#artists-chart::-webkit-scrollbar-track,
+#search-results::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+.scrollable::-webkit-scrollbar-thumb,
+#artists-chart::-webkit-scrollbar-thumb,
+#search-results::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.scrollable::-webkit-scrollbar-thumb:hover,
+#artists-chart::-webkit-scrollbar-thumb:hover,
+#search-results::-webkit-scrollbar-thumb:hover {
+    background: #484f58;
+}
+
+/* ===== Search Bar ===== */
+#artist-search {
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+#artist-search:focus {
+    background-color: var(--bg-primary);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+    box-shadow: 0 0 0 0.25rem rgba(88, 166, 255, 0.25);
+}
+
+#artist-search::placeholder {
+    color: var(--text-secondary);
+}
+
+/* ===== Search Results Dropdown ===== */
+#search-results {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.search-result-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    text-decoration: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.15s ease;
+}
+
+.search-result-item:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--accent-blue);
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-no-results {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+/* ===== Tabs (for yearly stats) ===== */
+.nav-tabs {
+    border-bottom-color: var(--border-color);
+}
+
+.nav-tabs .nav-link {
+    color: var(--text-secondary);
+    background-color: transparent;
+    border-color: transparent;
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--text-primary);
+    border-color: var(--border-color);
+    background-color: rgba(240, 246, 252, 0.05);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--bg-primary) !important;
+    background-color: var(--accent-blue) !important;
+    border-color: var(--accent-blue) !important;
+}
+
+.nav-tabs .nav-link.active:hover {
+    color: var(--bg-primary) !important;
+    background-color: var(--accent-blue-dark) !important;
+    border-color: var(--accent-blue-dark) !important;
+}
+
+.tab-content {
+    color: var(--text-primary);
+}
+
+/* ===== Forms ===== */
+.form-label {
+    color: var(--text-primary);
+}
+
+.form-select {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.form-select:focus {
+    background-color: var(--bg-secondary);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+
+/* ===== Bar Chart Component ===== */
+.bar-chart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(240, 246, 252, 0.1);
+}
+
+.bar-chart-item-link {
+    color: var(--text-primary);
+    text-decoration: none;
+    flex-grow: 1;
+    margin-right: 1rem;
+    max-width: 40%;
+    font-size: 0.95rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bar-chart-item-link:hover {
+    color: var(--accent-blue);
+}
+
+.bar-chart-visual {
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+    max-width: 60%;
+    justify-content: flex-end;
+}
+
+.bar-chart-bar {
+    height: 32px;
+    background: linear-gradient(90deg, rgba(56, 139, 253, 0.3) 0%, rgba(56, 139, 253, 0.8) 100%);
+    border-radius: 0.375rem 0 0 0.375rem;
+}
+
+.bar-chart-value {
+    background: linear-gradient(135deg, #58a6ff 0%, #388bfd 100%);
+    color: var(--bg-primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0 0.375rem 0.375rem 0;
+    min-width: 70px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== List Item Component ===== */
+.list-item {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.list-item-link {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.list-item-link:hover {
+    color: var(--accent-blue);
+}
+
+.list-item-count {
+    color: var(--text-secondary);
+}
+
+/* ===== Section Headers ===== */
+.section-header {
+    color: var(--accent-blue);
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+
+.subsection-header {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+/* ===== HTMX Loading States ===== */
+.htmx-indicator {
+    display: none;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+
+.htmx-request.htmx-indicator {
+    display: inline;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    border: 3px solid var(--border-color);
+    border-top: 3px solid var(--accent-blue);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

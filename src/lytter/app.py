@@ -459,7 +459,7 @@ async def artist_stats(request: Request, artist_name: str):
 
 @app.get("/top-artists")
 async def top_artists():
-    """Get top artists data."""
+    """Get top artists data (JSON for backwards compatibility)."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -470,6 +470,23 @@ async def top_artists():
 
     artists = [{"artist": row[0], "plays": row[1]} for row in result]
     return {"artists": artists}
+
+
+@app.get("/html/top-artists", response_class=HTMLResponse)
+async def top_artists_html(request: Request):
+    """Get top artists as HTML fragment for HTMX."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT artist, COUNT(*) as plays FROM musiclibrary GROUP BY artist ORDER BY plays DESC LIMIT 50"
+    )
+    result = cursor.fetchall()
+    conn.close()
+
+    artists = [{"artist": row[0], "plays": row[1]} for row in result]
+    return templates.TemplateResponse(
+        "_top_artists_list.html", {"request": request, "artists": artists}
+    )
 
 
 @app.get("/charts/listening-timeline")
@@ -556,7 +573,7 @@ async def listening_timeline():
 
 @app.get("/recent-stats")
 async def recent_stats():
-    """Get top artists, albums, and songs from past week and month."""
+    """Get top artists, albums, and songs from past week and month (JSON)."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -650,6 +667,16 @@ async def recent_stats():
         "month_albums": month_albums,
         "month_songs": month_songs,
     }
+
+
+@app.get("/html/recent-favorites", response_class=HTMLResponse)
+async def recent_favorites_html(request: Request):
+    """Get recent favorites as HTML fragment for HTMX."""
+    # Reuse the same query logic
+    stats = await recent_stats()
+    return templates.TemplateResponse(
+        "_recent_favorites.html", {"request": request, **stats}
+    )
 
 
 @app.get("/artist-top-songs")

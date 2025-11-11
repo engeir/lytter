@@ -1,0 +1,120 @@
+{# Reusable Jinja2 Macros for Last.fm Stats #}
+
+{# Stat Card - Used for dashboard metrics #}
+{% macro stat_card(title, value) %}
+<div class="card text-center">
+    <div class="card-body">
+        <h5 class="card-title">{{ title }}</h5>
+        <h3 class="text-primary">{{ "{:,}".format(value) }}</h3>
+    </div>
+</div>
+{% endmacro %}
+
+{# Bar Chart Item - Used in top artists, songs, albums lists #}
+{% macro bar_chart_item(label, value, max_value, url) %}
+<div class="bar-chart-item">
+    <a href="{{ url }}" class="bar-chart-item-link">{{ label }}</a>
+    <div class="bar-chart-visual">
+        <div class="bar-chart-bar" style="width: {{ (value / max_value * 100) if max_value > 0 else 0 }}%;"></div>
+        <span class="bar-chart-value">{{ "{:,}".format(value) }}</span>
+    </div>
+</div>
+{% endmacro %}
+
+{# Simple List Item - Used in Recent Favorites #}
+{% macro list_item(label, count, url) %}
+<li class="list-item">
+    <a href="{{ url }}" class="list-item-link">{{ label }}</a>
+    <span class="list-item-count">({{ count }})</span>
+</li>
+{% endmacro %}
+
+{# Artist Link #}
+{% macro artist_link(artist) %}
+<a href="/artist/{{ artist|urlencode }}" class="list-item-link">{{ artist }}</a>
+{% endmacro %}
+
+{# Album Link #}
+{% macro album_link(artist, album) %}
+<a href="/album/{{ artist|urlencode }}/{{ album|urlencode }}" class="list-item-link">{{ album }}</a>
+{% endmacro %}
+
+{# Song Link #}
+{% macro song_link(artist, track) %}
+<a href="/song/{{ artist|urlencode }}/{{ track|urlencode }}" class="list-item-link">{{ track }}</a>
+{% endmacro %}
+
+{# Top Items Section - Artists/Albums/Songs with counts #}
+{% macro top_artists_list(artists) %}
+<h6 class="subsection-header">Top Artists</h6>
+<ol class="mb-3 ps-3">
+    {% for item in artists %}
+    <li class="list-item">
+        {{ artist_link(item.artist) }}
+        <span class="list-item-count">({{ item.plays }})</span>
+    </li>
+    {% endfor %}
+</ol>
+{% endmacro %}
+
+{% macro top_albums_list(albums) %}
+<h6 class="subsection-header">Top Albums</h6>
+<ol class="mb-3 ps-3" style="font-size: 0.85rem;">
+    {% for item in albums %}
+    <li class="list-item">
+        {{ artist_link(item.artist) }} - {{ album_link(item.artist, item.album) }}
+        <span class="list-item-count">({{ item.plays }})</span>
+    </li>
+    {% endfor %}
+</ol>
+{% endmacro %}
+
+{% macro top_songs_list(songs) %}
+<h6 class="subsection-header">Top Songs</h6>
+<ol class="ps-3" style="font-size: 0.85rem;">
+    {% for item in songs %}
+    <li class="list-item">
+        {{ artist_link(item.artist) }} - {{ song_link(item.artist, item.track) }}
+        <span class="list-item-count">({{ item.plays }})</span>
+    </li>
+    {% endfor %}
+</ol>
+{% endmacro %}
+
+{# Loading Indicator #}
+{% macro loading_spinner(text="Loading...") %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 100px;">
+    <div class="loading-spinner"></div>
+    <span class="text-muted">{{ text }}</span>
+</div>
+{% endmacro %}
+
+{# HTMX Loading Container #}
+{% macro htmx_container(endpoint, trigger="load", loading_text="Loading...") %}
+<div hx-get="{{ endpoint }}" 
+     hx-trigger="{{ trigger }}" 
+     hx-indicator=".htmx-indicator">
+    {{ loading_spinner(loading_text) }}
+</div>
+{% endmacro %}
+
+{# Yearly Top Item - Used in yearly stats #}
+{% macro yearly_top_item(index, primary_text, secondary_text, plays, primary_url, secondary_url) %}
+<div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
+    <div class="flex-grow-1" style="min-width: 0;">
+        <a href="{{ primary_url }}" class="text-decoration-none" style="color: var(--text-primary); font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ index }}. {{ primary_text }}
+        </a>
+        {% if secondary_text %}
+        <a href="{{ secondary_url }}" class="text-decoration-none" style="color: var(--text-secondary); font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ secondary_text }}
+        </a>
+        {% endif %}
+    </div>
+    <div class="ms-2" style="min-width: 60px; text-align: right;">
+        <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">
+            {{ plays }}
+        </span>
+    </div>
+</div>
+{% endmacro %}

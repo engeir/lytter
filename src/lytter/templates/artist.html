@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros.html' import stat_card %}
 
 {% block title %}{{ artist_name }} - Last.fm Stats{% endblock %}
 
@@ -14,28 +15,13 @@
 
 <div class="row mb-4">
     <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Total Plays</h5>
-                <h3 class="text-primary">{{ "{:,}".format(total_plays) }}</h3>
-            </div>
-        </div>
+        {{ stat_card("Total Plays", total_plays) }}
     </div>
     <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Unique Tracks</h5>
-                <h3 class="text-primary">{{ unique_tracks }}</h3>
-            </div>
-        </div>
+        {{ stat_card("Unique Tracks", unique_tracks) }}
     </div>
     <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Unique Albums</h5>
-                <h3 class="text-primary">{{ unique_albums }}</h3>
-            </div>
-        </div>
+        {{ stat_card("Unique Albums", unique_albums) }}
     </div>
 </div>
 
@@ -78,40 +64,21 @@
     // Plot listening history
     Plotly.newPlot('history-chart', historyData.data, historyData.layout);
 
-    // Fetch and display top songs
+    // Fetch and display top songs  
     fetch(`/artist-top-songs?artist=${encodeURIComponent(artistName)}`)
         .then(response => response.json())
         .then(data => {
             const maxPlays = data.songs.length > 0 ? data.songs[0].plays : 1;
-
             const list = data.songs.map(song => {
-                const maxWidthPercent = 100;
-                const barWidth = (song.plays / maxPlays) * maxWidthPercent;
-
-                return `<div class="d-flex justify-content-between align-items-center py-3 position-relative" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                    <a href="/song/${encodeURIComponent(artistName)}/${encodeURIComponent(song.track)}" class="flex-grow-1 me-3 text-decoration-none" style="color: #f0f6fc; max-width: 40%; font-size: 0.95rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${song.track}</a>
-                    <div class="d-flex align-items-center flex-grow-1" style="max-width: 60%; justify-content: flex-end;">
-                        <div style="
-                            width: ${barWidth}%;
-                            height: 32px;
-                            background: linear-gradient(90deg, rgba(56, 139, 253, 0.3) 0%, rgba(56, 139, 253, 0.8) 100%);
-                            border-radius: 0.375rem 0 0 0.375rem;
-                        "></div>
-                        <span style="
-                            background: linear-gradient(135deg, #58a6ff 0%, #388bfd 100%);
-                            color: #0d1117;
-                            font-weight: 600;
-                            font-size: 0.9rem;
-                            padding: 0.5rem 0.75rem;
-                            border-radius: 0 0.375rem 0.375rem 0;
-                            min-width: 70px;
-                            text-align: center;
-                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-                        ">${song.plays.toLocaleString()}</span>
+                const barWidth = (song.plays / maxPlays) * 100;
+                return `<div class="bar-chart-item">
+                    <a href="/song/${encodeURIComponent(artistName)}/${encodeURIComponent(song.track)}" class="bar-chart-item-link">${song.track}</a>
+                    <div class="bar-chart-visual">
+                        <div class="bar-chart-bar" style="width: ${barWidth}%;"></div>
+                        <span class="bar-chart-value">${song.plays.toLocaleString()}</span>
                     </div>
                 </div>`;
             }).join('');
-
             document.getElementById('top-songs-list').innerHTML = list;
         })
         .catch(error => {
@@ -123,35 +90,16 @@
         .then(response => response.json())
         .then(data => {
             const maxPlays = data.albums.length > 0 ? data.albums[0].plays : 1;
-
             const list = data.albums.map(album => {
-                const maxWidthPercent = 100;
-                const barWidth = (album.plays / maxPlays) * maxWidthPercent;
-
-                return `<div class="d-flex justify-content-between align-items-center py-3 position-relative" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                    <a href="/album/${encodeURIComponent(artistName)}/${encodeURIComponent(album.album)}" class="flex-grow-1 me-3 text-decoration-none" style="color: #f0f6fc; max-width: 40%; font-size: 0.95rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${album.album}</a>
-                    <div class="d-flex align-items-center flex-grow-1" style="max-width: 60%; justify-content: flex-end;">
-                        <div style="
-                            width: ${barWidth}%;
-                            height: 32px;
-                            background: linear-gradient(90deg, rgba(56, 139, 253, 0.3) 0%, rgba(56, 139, 253, 0.8) 100%);
-                            border-radius: 0.375rem 0 0 0.375rem;
-                        "></div>
-                        <span style="
-                            background: linear-gradient(135deg, #58a6ff 0%, #388bfd 100%);
-                            color: #0d1117;
-                            font-weight: 600;
-                            font-size: 0.9rem;
-                            padding: 0.5rem 0.75rem;
-                            border-radius: 0 0.375rem 0.375rem 0;
-                            min-width: 70px;
-                            text-align: center;
-                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-                        ">${album.plays.toLocaleString()}</span>
+                const barWidth = (album.plays / maxPlays) * 100;
+                return `<div class="bar-chart-item">
+                    <a href="/album/${encodeURIComponent(artistName)}/${encodeURIComponent(album.album)}" class="bar-chart-item-link">${album.album}</a>
+                    <div class="bar-chart-visual">
+                        <div class="bar-chart-bar" style="width: ${barWidth}%;"></div>
+                        <span class="bar-chart-value">${album.plays.toLocaleString()}</span>
                     </div>
                 </div>`;
             }).join('');
-
             document.getElementById('top-albums-list').innerHTML = list;
         })
         .catch(error => {

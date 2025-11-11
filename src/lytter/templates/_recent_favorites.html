@@ -1,0 +1,17 @@
+{# HTML Fragment for Recent Favorites - Loaded via HTMX #}
+{% from 'macros.html' import top_artists_list, top_albums_list, top_songs_list %}
+
+<div class="row">
+    <div class="col-md-6">
+        <h6 class="section-header">Past Week</h6>
+        {{ top_artists_list(week_artists) }}
+        {{ top_albums_list(week_albums) }}
+        {{ top_songs_list(week_songs) }}
+    </div>
+    <div class="col-md-6">
+        <h6 class="section-header">Past Month</h6>
+        {{ top_artists_list(month_artists) }}
+        {{ top_albums_list(month_albums) }}
+        {{ top_songs_list(month_songs) }}
+    </div>
+</div>

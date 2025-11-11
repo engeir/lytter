@@ -3,46 +3,6 @@
 {% block title %}Yearly Statistics - Last.fm Stats{% endblock %}
 
 {% block content %}
-<style>
-    /* Fix tab styling for dark theme */
-    .nav-tabs {
-        border-bottom-color: #30363d;
-    }
-    
-    .nav-tabs .nav-link {
-        color: #8b949e;
-        background-color: transparent;
-        border-color: transparent;
-    }
-    
-    .nav-tabs .nav-link:hover {
-        color: #f0f6fc;
-        border-color: #30363d;
-        background-color: rgba(240, 246, 252, 0.05);
-    }
-    
-    .nav-tabs .nav-link.active {
-        color: #0d1117 !important;
-        background-color: #58a6ff !important;
-        border-color: #58a6ff !important;
-    }
-    
-    /* Fix active tab hover - keep dark text on blue background */
-    .nav-tabs .nav-link.active:hover {
-        color: #0d1117 !important;
-        background-color: #388bfd !important;
-        border-color: #388bfd !important;
-    }
-    
-    .tab-content {
-        color: #f0f6fc;
-    }
-    
-    /* Fix form label colors */
-    .form-label {
-        color: #f0f6fc;
-    }
-</style>
 <div class="row mb-4">
     <div class="col-12">
         <h1 class="mb-4">📊 Yearly Statistics</h1>
@@ -497,74 +457,56 @@
     }
 
     function renderTopSongs(songs) {
-        const maxPlays = songs.length > 0 ? songs[0].plays : 1;
-        const html = songs.map((song, index) => {
-            const barWidth = (song.plays / maxPlays) * 100;
-            return `
-                <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                    <div class="flex-grow-1" style="min-width: 0;">
-                        <a href="/song/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.track)}" class="text-decoration-none" style="color: #f0f6fc; font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            ${index + 1}. ${escapeHtml(song.track)}
-                        </a>
-                        <a href="/artist/${encodeURIComponent(song.artist)}" class="text-decoration-none" style="color: #8b949e; font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            ${escapeHtml(song.artist)}
-                        </a>
-                    </div>
-                    <div class="ms-2" style="min-width: 60px; text-align: right;">
-                        <span style="color: #58a6ff; font-weight: 600; font-size: 0.9rem;">
-                            ${song.plays}
-                        </span>
-                    </div>
+        const html = songs.map((song, index) => `
+            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <a href="/song/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.track)}" class="text-decoration-none" style="color: var(--text-primary); font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${index + 1}. ${escapeHtml(song.track)}
+                    </a>
+                    <a href="/artist/${encodeURIComponent(song.artist)}" class="text-decoration-none" style="color: var(--text-secondary); font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${escapeHtml(song.artist)}
+                    </a>
                 </div>
-            `;
-        }).join('');
+                <div class="ms-2" style="min-width: 60px; text-align: right;">
+                    <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">${song.plays}</span>
+                </div>
+            </div>
+        `).join('');
         document.getElementById('top-songs-list').innerHTML = html;
     }
 
     function renderTopAlbums(albums) {
-        const maxPlays = albums.length > 0 ? albums[0].plays : 1;
-        const html = albums.map((album, index) => {
-            const barWidth = (album.plays / maxPlays) * 100;
-            return `
-                <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                    <div class="flex-grow-1" style="min-width: 0;">
-                        <a href="/album/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.album)}" class="text-decoration-none" style="color: #f0f6fc; font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            ${index + 1}. ${escapeHtml(album.album)}
-                        </a>
-                        <a href="/artist/${encodeURIComponent(album.artist)}" class="text-decoration-none" style="color: #8b949e; font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            ${escapeHtml(album.artist)}
-                        </a>
-                    </div>
-                    <div class="ms-2" style="min-width: 60px; text-align: right;">
-                        <span style="color: #58a6ff; font-weight: 600; font-size: 0.9rem;">
-                            ${album.plays}
-                        </span>
-                    </div>
+        const html = albums.map((album, index) => `
+            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <a href="/album/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.album)}" class="text-decoration-none" style="color: var(--text-primary); font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${index + 1}. ${escapeHtml(album.album)}
+                    </a>
+                    <a href="/artist/${encodeURIComponent(album.artist)}" class="text-decoration-none" style="color: var(--text-secondary); font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${escapeHtml(album.artist)}
+                    </a>
                 </div>
-            `;
-        }).join('');
+                <div class="ms-2" style="min-width: 60px; text-align: right;">
+                    <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">${album.plays}</span>
+                </div>
+            </div>
+        `).join('');
         document.getElementById('top-albums-list').innerHTML = html;
     }
 
     function renderTopArtists(artists) {
-        const maxPlays = artists.length > 0 ? artists[0].plays : 1;
-        const html = artists.map((artist, index) => {
-            const barWidth = (artist.plays / maxPlays) * 100;
-            return `
-                <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                    <div class="flex-grow-1" style="min-width: 0;">
-                        <a href="/artist/${encodeURIComponent(artist.artist)}" class="text-decoration-none" style="color: #f0f6fc; font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            ${index + 1}. ${escapeHtml(artist.artist)}
-                        </a>
-                    </div>
-                    <div class="ms-2" style="min-width: 60px; text-align: right;">
-                        <span style="color: #58a6ff; font-weight: 600; font-size: 0.9rem;">
-                            ${artist.plays}
-                        </span>
-                    </div>
+        const html = artists.map((artist, index) => `
+            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <a href="/artist/${encodeURIComponent(artist.artist)}" class="text-decoration-none" style="color: var(--text-primary); font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${index + 1}. ${escapeHtml(artist.artist)}
+                    </a>
                 </div>
-            `;
-        }).join('');
+                <div class="ms-2" style="min-width: 60px; text-align: right;">
+                    <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">${artist.plays}</span>
+                </div>
+            </div>
+        `).join('');
         document.getElementById('top-artists-list').innerHTML = html;
     }
 

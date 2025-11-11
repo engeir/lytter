@@ -30,6 +30,7 @@ local linters = new Mapping<String, Step> {
 hooks {
     ["pre-commit"] {
         fix = true    // automatically modify files with available linter fixes
+        stash = "git"
         steps {
             ...linters // add all linters defined above
         }

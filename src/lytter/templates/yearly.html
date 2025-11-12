@@ -53,7 +53,7 @@
                style="max-height: 600px;
                       overflow-y: auto"
                hx-get="/html/yearly/top-items/songs?year={{ current_year }}&limit=20"
-               hx-trigger="load, yearChanged from:body"
+               hx-trigger="load"
                hx-swap="innerHTML">
             <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
               <div class="loading-spinner"></div>
@@ -71,7 +71,7 @@
                style="max-height: 600px;
                       overflow-y: auto"
                hx-get="/html/yearly/top-items/albums?year={{ current_year }}&limit=20"
-               hx-trigger="load, yearChanged from:body"
+               hx-trigger="load"
                hx-swap="innerHTML">
             <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
               <div class="loading-spinner"></div>
@@ -89,7 +89,7 @@
                style="max-height: 600px;
                       overflow-y: auto"
                hx-get="/html/yearly/top-items/artists?year={{ current_year }}&limit=20"
-               hx-trigger="load, yearChanged from:body"
+               hx-trigger="load"
                hx-swap="innerHTML">
             <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
               <div class="loading-spinner"></div>
@@ -155,16 +155,30 @@
       // Update all stats when year changes
       document.getElementById('yearSelect').addEventListener('change', function() {
           currentYear = parseInt(this.value);
+          
+          console.log('Year changed to:', currentYear);
 
-          // Update HTMX endpoints with new year
-          document.getElementById('top-songs-list').setAttribute('hx-get', `/html/yearly/top-items/songs?year=${currentYear}&limit=20`);
-          document.getElementById('top-albums-list').setAttribute('hx-get', `/html/yearly/top-items/albums?year=${currentYear}&limit=20`);
-          document.getElementById('top-artists-list').setAttribute('hx-get', `/html/yearly/top-items/artists?year=${currentYear}&limit=20`);
-
-          // Trigger HTMX to reload
-          htmx.trigger('#top-songs-list', 'yearChanged');
-          htmx.trigger('#top-albums-list', 'yearChanged');
-          htmx.trigger('#top-artists-list', 'yearChanged');
+          // Fetch URLs
+          const songUrl = `/html/yearly/top-items/songs?year=${currentYear}&limit=20`;
+          const albumUrl = `/html/yearly/top-items/albums?year=${currentYear}&limit=20`;
+          const artistUrl = `/html/yearly/top-items/artists?year=${currentYear}&limit=20`;
+          
+          // Use HTMX for songs and artists
+          console.log('Fetching songs:', songUrl);
+          htmx.ajax('GET', songUrl, { target: '#top-songs-list', swap: 'innerHTML' });
+          
+          console.log('Fetching artists:', artistUrl);
+          htmx.ajax('GET', artistUrl, { target: '#top-artists-list', swap: 'innerHTML' });
+          
+          // Use plain fetch for albums to bypass HTMX issue
+          console.log('Fetching albums (fetch):', albumUrl);
+          fetch(albumUrl)
+              .then(response => response.text())
+              .then(html => {
+                  document.getElementById('top-albums-list').innerHTML = html;
+                  console.log('Albums updated successfully');
+              })
+              .catch(error => console.error('Error fetching albums:', error));
 
           // Load charts
           loadTimePatterns();

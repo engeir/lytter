@@ -1,18 +1,36 @@
-FROM python:3.12-slim
+# Build stage - install dependencies
+FROM ghcr.io/astral-sh/uv:0.8.23-python3.12-alpine AS builder
+WORKDIR /app
 
-# Install uv.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-# Copy pyproject.toml, README, and package structure
+# Copy dependency files
 COPY pyproject.toml uv.lock README.md ./
 COPY src/ src/
-WORKDIR /app
-RUN uv sync --frozen --no-cache
 
-# Create directories
-RUN mkdir -p /app/data /app/src/lytter/static
+# Install dependencies (production only, no dev deps)
+RUN uv sync --frozen --no-cache --no-dev
+
+# Runtime stage - minimal final image
+FROM ghcr.io/astral-sh/uv:0.8.23-python3.12-alpine
+WORKDIR /app
+
+# Create user and directories first
+RUN addgroup -g 1000 lytter && \
+    adduser -D -u 1000 -G lytter lytter && \
+    mkdir -p /app/data /app/src/lytter/static && \
+    chown -R lytter:lytter /app
+
+# Copy with correct ownership (avoids chown layer duplication)
+COPY --from=builder --chown=lytter:lytter /app/.venv /app/.venv
+COPY --from=builder --chown=lytter:lytter /app/src /app/src
+COPY --from=builder --chown=lytter:lytter /app/pyproject.toml /app/README.md ./
+
+# Switch to non-root user
+USER lytter
+
+# Set Python path to use venv
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 
-# Run the application with healthcheck-friendly settings
-CMD ["uv", "run", "uvicorn", "lytter.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application
+CMD ["uvicorn", "lytter.app:app", "--host", "0.0.0.0", "--port", "8000"]

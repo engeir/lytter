@@ -319,6 +319,7 @@ a:hover {
 .list-item {
     font-size: 0.9rem;
     margin-bottom: 0.5rem;
+    color: var(--text-primary); /* Make list numbers visible */
 }
 
 .list-item-link {
@@ -332,6 +333,18 @@ a:hover {
 
 .list-item-count {
     color: var(--text-secondary);
+}
+
+.list-item-secondary {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    text-decoration: none;
+    display: block;
+    margin-top: 0.15rem;
+}
+
+.list-item-secondary:hover {
+    color: var(--accent-blue);
 }
 
 /* ===== Section Headers ===== */

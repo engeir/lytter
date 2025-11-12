@@ -1,533 +1,537 @@
 {% extends "base.html" %}
-
-{% block title %}Yearly Statistics - Last.fm Stats{% endblock %}
+{% block title %}
+  Yearly Statistics - Last.fm Stats
+{% endblock
+%}
 
 {% block content %}
-<div class="row mb-4">
+  <div class="row mb-4">
     <div class="col-12">
-        <h1 class="mb-4">📊 Yearly Statistics</h1>
-        
-        <!-- Year Selector -->
-        <div class="card mb-4">
-            <div class="card-body">
-                <label for="yearSelect" class="form-label">Select Year</label>
-                <select class="form-select" id="yearSelect" style="max-width: 200px;">
-                    {% for year in years %}
-                    <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-    </div>
-</div>
+      <h1 class="mb-4">📊 Yearly Statistics</h1>
 
-<!-- Time Patterns Row -->
-<div class="row mb-4">
+      <!-- Year Selector -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <label for="yearSelect" class="form-label">Select Year</label>
+          <select class="form-select" id="yearSelect" style="max-width: 200px">
+            {% for year in years %}
+              <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Time Patterns Row -->
+  <div class="row mb-4">
     <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">🕐 Listening by Hour</h5>
-                <div id="hourly-chart" style="height: 400px;"></div>
-            </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">🕐 Listening by Hour</h5>
+          <div id="hourly-chart" style="height: 400px"></div>
         </div>
+      </div>
     </div>
     <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">📅 Listening by Day of Week</h5>
-                <div id="weekly-chart" style="height: 400px;"></div>
-            </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">📅 Listening by Day of Week</h5>
+          <div id="weekly-chart" style="height: 400px"></div>
         </div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Top Items Row -->
-<div class="row mb-4">
+  <!-- Top Items Row -->
+  <div class="row mb-4">
     <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">🎵 Top 20 Songs</h5>
-                <div id="top-songs-list" style="max-height: 600px; overflow-y: auto;"></div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">🎵 Top 20 Songs</h5>
+          <div id="top-songs-list"
+               style="max-height: 600px;
+                      overflow-y: auto"
+               hx-get="/html/yearly/top-items/songs?year={{ current_year }}&limit=20"
+               hx-trigger="load, yearChanged from:body"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
             </div>
+          </div>
         </div>
+      </div>
     </div>
     <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">💿 Top 20 Albums</h5>
-                <div id="top-albums-list" style="max-height: 600px; overflow-y: auto;"></div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">💿 Top 20 Albums</h5>
+          <div id="top-albums-list"
+               style="max-height: 600px;
+                      overflow-y: auto"
+               hx-get="/html/yearly/top-items/albums?year={{ current_year }}&limit=20"
+               hx-trigger="load, yearChanged from:body"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
             </div>
+          </div>
         </div>
+      </div>
     </div>
     <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">🎤 Top 20 Artists</h5>
-                <div id="top-artists-list" style="max-height: 600px; overflow-y: auto;"></div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">🎤 Top 20 Artists</h5>
+          <div id="top-artists-list"
+               style="max-height: 600px;
+                      overflow-y: auto"
+               hx-get="/html/yearly/top-items/artists?year={{ current_year }}&limit=20"
+               hx-trigger="load, yearChanged from:body"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
             </div>
+          </div>
         </div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Evolution Charts Row -->
-<div class="row mb-4">
+  <!-- Evolution Charts Row -->
+  <div class="row mb-4">
     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">📈 Monthly Top 3 Ranking Evolution</h5>
-                
-                <!-- Tab selector for evolution type -->
-                <ul class="nav nav-tabs mb-3" id="evolutionTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="artists-tab" data-bs-toggle="tab" data-bs-target="#artists-evolution" type="button" role="tab">
-                            Artists
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="albums-tab" data-bs-toggle="tab" data-bs-target="#albums-evolution" type="button" role="tab">
-                            Albums
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="songs-tab" data-bs-toggle="tab" data-bs-target="#songs-evolution" type="button" role="tab">
-                            Songs
-                        </button>
-                    </li>
-                </ul>
-                
-                <div class="tab-content" id="evolutionTabContent">
-                    <div class="tab-pane fade show active" id="artists-evolution" role="tabpanel">
-                        <div id="artists-evolution-chart" style="height: 600px;"></div>
-                    </div>
-                    <div class="tab-pane fade" id="albums-evolution" role="tabpanel">
-                        <div id="albums-evolution-chart" style="height: 600px;"></div>
-                    </div>
-                    <div class="tab-pane fade" id="songs-evolution" role="tabpanel">
-                        <div id="songs-evolution-chart" style="height: 600px;"></div>
-                    </div>
-                </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">📈 Monthly Top 3 Ranking Evolution</h5>
+
+          <!-- Tab selector for evolution type -->
+          <ul class="nav nav-tabs mb-3" id="evolutionTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active"
+                      id="artists-tab"
+                      data-bs-toggle="tab"
+                      data-bs-target="#artists-evolution"
+                      type="button"
+                      role="tab">Artists</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="albums-tab" data-bs-toggle="tab" data-bs-target="#albums-evolution" type="button" role="tab">
+                Albums
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="songs-tab" data-bs-toggle="tab" data-bs-target="#songs-evolution" type="button" role="tab">
+                Songs
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content" id="evolutionTabContent">
+            <div class="tab-pane fade show active" id="artists-evolution" role="tabpanel">
+              <div id="artists-evolution-chart" style="height: 600px"></div>
             </div>
+            <div class="tab-pane fade" id="albums-evolution" role="tabpanel">
+              <div id="albums-evolution-chart" style="height: 600px"></div>
+            </div>
+            <div class="tab-pane fade" id="songs-evolution" role="tabpanel">
+              <div id="songs-evolution-chart" style="height: 600px"></div>
+            </div>
+          </div>
         </div>
+      </div>
     </div>
-</div>
+  </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-<script>
-    let currentYear = {{ current_year }};
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script>
+      let currentYear = {{ current_year }};
 
-    // Update all stats when year changes
-    document.getElementById('yearSelect').addEventListener('change', function() {
-        currentYear = parseInt(this.value);
-        loadAllStats();
-    });
+      // Update all stats when year changes
+      document.getElementById('yearSelect').addEventListener('change', function() {
+          currentYear = parseInt(this.value);
 
-    function loadAllStats() {
-        loadTopItems();
-        loadTimePatterns();
-        loadEvolution();
-    }
+          // Update HTMX endpoints with new year
+          document.getElementById('top-songs-list').setAttribute('hx-get', `/html/yearly/top-items/songs?year=${currentYear}&limit=20`);
+          document.getElementById('top-albums-list').setAttribute('hx-get', `/html/yearly/top-items/albums?year=${currentYear}&limit=20`);
+          document.getElementById('top-artists-list').setAttribute('hx-get', `/html/yearly/top-items/artists?year=${currentYear}&limit=20`);
 
-    function loadEvolution() {
-        loadEvolutionForType('artists');
-        loadEvolutionForType('albums');
-        loadEvolutionForType('songs');
-    }
+          // Trigger HTMX to reload
+          htmx.trigger('#top-songs-list', 'yearChanged');
+          htmx.trigger('#top-albums-list', 'yearChanged');
+          htmx.trigger('#top-artists-list', 'yearChanged');
 
-    function loadEvolutionForType(itemType) {
-        fetch(`/api/yearly/evolution?year=${currentYear}&item_type=${itemType}&top_n=3`)
-            .then(response => response.json())
-            .then(data => {
-                renderEvolutionChart(data, itemType);
-            })
-            .catch(error => console.error(`Error loading ${itemType} evolution:`, error));
-    }
+          // Load charts
+          loadTimePatterns();
+          loadEvolution();
+      });
 
-    function renderEvolutionChart(data, itemType) {
-        if (!data.dates || data.dates.length === 0) {
-            return;
-        }
+      function loadEvolution() {
+          loadEvolutionForType('artists');
+          loadEvolutionForType('albums');
+          loadEvolutionForType('songs');
+      }
 
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        
-        // Calculate rankings for each month (1 = most plays, 10 = least plays)
-        const rankings = {};
-        
-        // For each month, rank all items by their play count
-        for (let monthIdx = 0; monthIdx < 12; monthIdx++) {
-            const monthScores = data.items.map(item => ({
-                item: item,
-                plays: data.data[item][monthIdx]
-            }));
-            
-            // Sort by plays (descending) and assign ranks
-            monthScores.sort((a, b) => b.plays - a.plays);
-            
-            monthScores.forEach((score, rank) => {
-                if (!rankings[score.item]) {
-                    rankings[score.item] = [];
-                }
-                rankings[score.item].push({
-                    rank: rank + 1,  // 1-based ranking
-                    plays: score.plays
-                });
-            });
-        }
+      function loadEvolutionForType(itemType) {
+          fetch(`/api/yearly/evolution?year=${currentYear}&item_type=${itemType}&top_n=3`)
+              .then(response => response.json())
+              .then(data => {
+                  renderEvolutionChart(data, itemType);
+              })
+              .catch(error => console.error(`Error loading ${itemType} evolution:`, error));
+      }
 
-        // Bright distinct colors for lines
-        const colors = [
-            '#58a6ff', '#ff6b6b', '#4ecdc4', '#ffd93d', '#ff9ff3',
-            '#a8e6cf', '#ffaaa5', '#b4a7d6', '#fdcb6e', '#95e1d3'
-        ];
+      function renderEvolutionChart(data, itemType) {
+          if (!data.dates || data.dates.length === 0) {
+              return;
+          }
 
-        const traces = data.items.map((item, index) => {
-            const itemRankings = rankings[item];
-            const displayName = item.length > 30 ? item.substring(0, 27) + '...' : item;
-            
-            // Create hover text with plays
-            const hoverText = itemRankings.map((r, monthIdx) => 
-                `${monthNames[monthIdx]}<br>Rank: #${r.rank}<br>Plays: ${r.plays}`
-            );
-            
-            return {
-                x: monthNames,
-                y: itemRankings.map(r => r.rank),
-                name: displayName,
-                type: 'scatter',
-                mode: 'lines+markers',
-                line: {
-                    color: colors[index % colors.length],
-                    width: 3
-                },
-                marker: {
-                    size: 8,
-                    color: colors[index % colors.length],
-                    line: {
-                        color: '#161b22',
-                        width: 2
-                    }
-                },
-                hovertext: hoverText,
-                hoverinfo: 'text'
-            };
-        });
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+          ];
 
-        const layout = {
-            paper_bgcolor: '#161b22',
-            plot_bgcolor: '#161b22',
-            font: { color: '#f0f6fc', size: 12 },
-            xaxis: {
-                gridcolor: '#30363d',
-                color: '#f0f6fc',
-                title: 'Month'
-            },
-            yaxis: {
-                gridcolor: '#30363d',
-                color: '#f0f6fc',
-                title: 'Ranking',
-                autorange: false,  // Manual range control
-                tickmode: 'linear',
-                tick0: 1,
-                dtick: 1,
-                range: [15.5, 0.5]  // Reversed: show ranks 1-15 (higher rank number at bottom)
-            },
-            hovermode: 'closest',
-            showlegend: true,
-            legend: {
-                orientation: 'v',
-                x: 1.02,
-                y: 1,
-                xanchor: 'left',
-                yanchor: 'top',
-                bgcolor: 'rgba(22, 27, 34, 0.9)',
-                bordercolor: '#30363d',
-                borderwidth: 1,
-                font: { size: 10, color: '#f0f6fc' }
-            },
-            margin: { l: 80, r: 200, t: 20, b: 60 }
-        };
+          // Calculate rankings for each month (1 = most plays, 10 = least plays)
+          const rankings = {};
 
-        const chartId = `${itemType}-evolution-chart`;
-        const config = {
-            responsive: true,
-            displayModeBar: false
-        };
-        
-        Plotly.newPlot(chartId, traces, layout, config);
-        
-        // Add hover highlighting: brighten hovered line, fade others
-        const chartElement = document.getElementById(chartId);
-        
-        chartElement.on('plotly_hover', function(eventData) {
-            const hoveredIndex = eventData.points[0].curveNumber;
-            
-            // Create update object to modify all traces
-            const update = {
-                'line.width': [],
-                'line.color': [],
-                'marker.size': [],
-                opacity: []
-            };
-            
-            traces.forEach((trace, index) => {
-                if (index === hoveredIndex) {
-                    // Highlight the hovered line
-                    update['line.width'].push(5);
-                    update['line.color'].push(colors[index % colors.length]);
-                    update['marker.size'].push(12);
-                    update.opacity.push(1);
-                } else {
-                    // Fade other lines
-                    update['line.width'].push(2);
-                    update['line.color'].push(colors[index % colors.length]);
-                    update['marker.size'].push(6);
-                    update.opacity.push(0.3);
-                }
-            });
-            
-            Plotly.restyle(chartId, update);
-        });
-        
-        chartElement.on('plotly_unhover', function() {
-            // Reset all traces to default styling
-            const update = {
-                'line.width': traces.map(() => 3),
-                'line.color': traces.map((t, i) => colors[i % colors.length]),
-                'marker.size': traces.map(() => 8),
-                opacity: traces.map(() => 1)
-            };
-            
-            Plotly.restyle(chartId, update);
-        });
-        
-        // Add legend click/hover highlighting
-        chartElement.on('plotly_legendclick', function(eventData) {
-            // Prevent default toggle behavior
-            return false;
-        });
-        
-        chartElement.on('plotly_legenddoubleclick', function(eventData) {
-            // Prevent default isolate behavior
-            return false;
-        });
-        
-        // Add legend hover effect using CSS approach
-        // We'll attach hover listeners to the legend items after a short delay
-        setTimeout(() => {
-            const legendItems = chartElement.querySelectorAll('.legend .traces .legendtoggle');
-            
-            legendItems.forEach((item, index) => {
-                item.addEventListener('mouseenter', function() {
-                    const update = {
-                        'line.width': [],
-                        'line.color': [],
-                        'marker.size': [],
-                        opacity: []
-                    };
-                    
-                    traces.forEach((trace, traceIndex) => {
-                        if (traceIndex === index) {
-                            // Highlight the hovered legend's line
-                            update['line.width'].push(5);
-                            update['line.color'].push(colors[traceIndex % colors.length]);
-                            update['marker.size'].push(12);
-                            update.opacity.push(1);
-                        } else {
-                            // Fade other lines
-                            update['line.width'].push(2);
-                            update['line.color'].push(colors[traceIndex % colors.length]);
-                            update['marker.size'].push(6);
-                            update.opacity.push(0.3);
-                        }
-                    });
-                    
-                    Plotly.restyle(chartId, update);
-                });
-                
-                item.addEventListener('mouseleave', function() {
-                    // Reset all traces to default styling
-                    const update = {
-                        'line.width': traces.map(() => 3),
-                        'line.color': traces.map((t, i) => colors[i % colors.length]),
-                        'marker.size': traces.map(() => 8),
-                        opacity: traces.map(() => 1)
-                    };
-                    
-                    Plotly.restyle(chartId, update);
-                });
-            });
-        }, 100);
-    }
+          // For each month, rank all items by their play count
+          for (let monthIdx = 0; monthIdx < 12; monthIdx++) {
+              const monthScores = data.items.map(item => ({
+                  item: item,
+                  plays: data.data[item][monthIdx]
+              }));
 
-    function loadTopItems() {
-        fetch(`/api/yearly/top-items?year=${currentYear}&limit=20`)
-            .then(response => response.json())
-            .then(data => {
-                renderTopSongs(data.songs);
-                renderTopAlbums(data.albums);
-                renderTopArtists(data.artists);
-            })
-            .catch(error => console.error('Error loading top items:', error));
-    }
+              // Sort by plays (descending) and assign ranks
+              monthScores.sort((a, b) => b.plays - a.plays);
 
-    function loadTimePatterns() {
-        fetch(`/api/yearly/time-patterns?year=${currentYear}`)
-            .then(response => response.json())
-            .then(data => {
-                renderHourlyChart(data.hourly);
-                renderWeeklyChart(data.weekly, data.day_names);
-            })
-            .catch(error => console.error('Error loading time patterns:', error));
-    }
+              monthScores.forEach((score, rank) => {
+                  if (!rankings[score.item]) {
+                      rankings[score.item] = [];
+                  }
+                  rankings[score.item].push({
+                      rank: rank + 1, // 1-based ranking
+                      plays: score.plays
+                  });
+              });
+          }
 
-    function renderHourlyChart(hourlyData) {
-        const hours = Array.from({length: 24}, (_, i) => `${i}:00`);
-        
-        const trace = {
-            type: 'barpolar',
-            r: hourlyData,
-            theta: hours,
-            marker: {
-                color: hourlyData,
-                colorscale: 'Blues',
-                line: {
-                    color: '#58a6ff',
-                    width: 1
-                }
-            },
-            hovertemplate: '<b>%{theta}</b><br>Scrobbles: %{r}<extra></extra>'
-        };
+          // Bright distinct colors for lines
+          const colors = [
+              '#58a6ff', '#ff6b6b', '#4ecdc4', '#ffd93d', '#ff9ff3',
+              '#a8e6cf', '#ffaaa5', '#b4a7d6', '#fdcb6e', '#95e1d3'
+          ];
 
-        const layout = {
-            polar: {
-                radialaxis: {
-                    gridcolor: '#30363d',
-                    color: '#f0f6fc'
-                },
-                angularaxis: {
-                    gridcolor: '#30363d',
-                    color: '#f0f6fc',
-                    direction: 'clockwise'
-                },
-                bgcolor: '#161b22'
-            },
-            paper_bgcolor: '#161b22',
-            font: { color: '#f0f6fc' },
-            showlegend: false,
-            margin: { l: 80, r: 80, t: 20, b: 80 }
-        };
+          const traces = data.items.map((item, index) => {
+              const itemRankings = rankings[item];
+              const displayName = item.length > 30 ? item.substring(0, 27) + '...' : item;
 
-        Plotly.newPlot('hourly-chart', [trace], layout, {responsive: true});
-    }
+              // Create hover text with plays
+              const hoverText = itemRankings.map((r, monthIdx) =>
+                  `${monthNames[monthIdx]}<br>Rank: #${r.rank}<br>Plays: ${r.plays}`
+              );
 
-    function renderWeeklyChart(weeklyData, dayNames) {
-        const trace = {
-            type: 'bar',
-            x: dayNames,
-            y: weeklyData,
-            marker: {
-                color: '#58a6ff',
-                line: {
-                    color: '#388bfd',
-                    width: 1
-                }
-            },
-            hovertemplate: '<b>%{x}</b><br>Scrobbles: %{y}<extra></extra>'
-        };
+              return {
+                  x: monthNames,
+                  y: itemRankings.map(r => r.rank),
+                  name: displayName,
+                  type: 'scatter',
+                  mode: 'lines+markers',
+                  line: {
+                      color: colors[index % colors.length],
+                      width: 3
+                  },
+                  marker: {
+                      size: 8,
+                      color: colors[index % colors.length],
+                      line: {
+                          color: '#161b22',
+                          width: 2
+                      }
+                  },
+                  hovertext: hoverText,
+                  hoverinfo: 'text'
+              };
+          });
 
-        const layout = {
-            paper_bgcolor: '#161b22',
-            plot_bgcolor: '#161b22',
-            font: { color: '#f0f6fc' },
-            xaxis: {
-                gridcolor: '#30363d',
-                color: '#f0f6fc'
-            },
-            yaxis: {
-                gridcolor: '#30363d',
-                color: '#f0f6fc',
-                title: 'Scrobbles'
-            },
-            margin: { l: 60, r: 40, t: 20, b: 80 }
-        };
+          const layout = {
+              paper_bgcolor: '#161b22',
+              plot_bgcolor: '#161b22',
+              font: {
+                  color: '#f0f6fc',
+                  size: 12
+              },
+              xaxis: {
+                  gridcolor: '#30363d',
+                  color: '#f0f6fc',
+                  title: 'Month'
+              },
+              yaxis: {
+                  gridcolor: '#30363d',
+                  color: '#f0f6fc',
+                  title: 'Ranking',
+                  autorange: false, // Manual range control
+                  tickmode: 'linear',
+                  tick0: 1,
+                  dtick: 1,
+                  range: [15.5, 0.5] // Reversed: show ranks 1-15 (higher rank number at bottom)
+              },
+              hovermode: 'closest',
+              showlegend: true,
+              legend: {
+                  orientation: 'v',
+                  x: 1.02,
+                  y: 1,
+                  xanchor: 'left',
+                  yanchor: 'top',
+                  bgcolor: 'rgba(22, 27, 34, 0.9)',
+                  bordercolor: '#30363d',
+                  borderwidth: 1,
+                  font: {
+                      size: 10,
+                      color: '#f0f6fc'
+                  }
+              },
+              margin: {
+                  l: 80,
+                  r: 200,
+                  t: 20,
+                  b: 60
+              }
+          };
 
-        Plotly.newPlot('weekly-chart', [trace], layout, {responsive: true});
-    }
+          const chartId = `${itemType}-evolution-chart`;
+          const config = {
+              responsive: true,
+              displayModeBar: false
+          };
 
-    function renderTopSongs(songs) {
-        const html = songs.map((song, index) => `
-            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                <div class="flex-grow-1" style="min-width: 0;">
-                    <a href="/song/${encodeURIComponent(song.artist)}/${encodeURIComponent(song.track)}" class="text-decoration-none" style="color: var(--text-primary); font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        ${index + 1}. ${escapeHtml(song.track)}
-                    </a>
-                    <a href="/artist/${encodeURIComponent(song.artist)}" class="text-decoration-none" style="color: var(--text-secondary); font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        ${escapeHtml(song.artist)}
-                    </a>
-                </div>
-                <div class="ms-2" style="min-width: 60px; text-align: right;">
-                    <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">${song.plays}</span>
-                </div>
-            </div>
-        `).join('');
-        document.getElementById('top-songs-list').innerHTML = html;
-    }
+          Plotly.newPlot(chartId, traces, layout, config);
 
-    function renderTopAlbums(albums) {
-        const html = albums.map((album, index) => `
-            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                <div class="flex-grow-1" style="min-width: 0;">
-                    <a href="/album/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.album)}" class="text-decoration-none" style="color: var(--text-primary); font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        ${index + 1}. ${escapeHtml(album.album)}
-                    </a>
-                    <a href="/artist/${encodeURIComponent(album.artist)}" class="text-decoration-none" style="color: var(--text-secondary); font-size: 0.8rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        ${escapeHtml(album.artist)}
-                    </a>
-                </div>
-                <div class="ms-2" style="min-width: 60px; text-align: right;">
-                    <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">${album.plays}</span>
-                </div>
-            </div>
-        `).join('');
-        document.getElementById('top-albums-list').innerHTML = html;
-    }
+          // Add hover highlighting: brighten hovered line, fade others
+          const chartElement = document.getElementById(chartId);
 
-    function renderTopArtists(artists) {
-        const html = artists.map((artist, index) => `
-            <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom: 1px solid rgba(240, 246, 252, 0.1);">
-                <div class="flex-grow-1" style="min-width: 0;">
-                    <a href="/artist/${encodeURIComponent(artist.artist)}" class="text-decoration-none" style="color: var(--text-primary); font-weight: 500; font-size: 0.9rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        ${index + 1}. ${escapeHtml(artist.artist)}
-                    </a>
-                </div>
-                <div class="ms-2" style="min-width: 60px; text-align: right;">
-                    <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">${artist.plays}</span>
-                </div>
-            </div>
-        `).join('');
-        document.getElementById('top-artists-list').innerHTML = html;
-    }
+          chartElement.on('plotly_hover', function(eventData) {
+              const hoveredIndex = eventData.points[0].curveNumber;
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+              // Create update object to modify all traces
+              const update = {
+                  'line.width': [],
+                  'line.color': [],
+                  'marker.size': [],
+                  opacity: []
+              };
 
-    // Load initial data
-    loadAllStats();
-    
-    // Resize charts when tabs are switched to ensure proper width
-    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(button => {
-        button.addEventListener('shown.bs.tab', function(event) {
-            const target = event.target.getAttribute('data-bs-target');
-            const chartId = target.replace('-evolution', '-evolution-chart').substring(1);
-            setTimeout(() => {
-                Plotly.Plots.resize(chartId);
-            }, 10);
-        });
-    });
-</script>
+              traces.forEach((trace, index) => {
+                  if (index === hoveredIndex) {
+                      // Highlight the hovered line
+                      update['line.width'].push(5);
+                      update['line.color'].push(colors[index % colors.length]);
+                      update['marker.size'].push(12);
+                      update.opacity.push(1);
+                  } else {
+                      // Fade other lines
+                      update['line.width'].push(2);
+                      update['line.color'].push(colors[index % colors.length]);
+                      update['marker.size'].push(6);
+                      update.opacity.push(0.3);
+                  }
+              });
+
+              Plotly.restyle(chartId, update);
+          });
+
+          chartElement.on('plotly_unhover', function() {
+              // Reset all traces to default styling
+              const update = {
+                  'line.width': traces.map(() => 3),
+                  'line.color': traces.map((t, i) => colors[i % colors.length]),
+                  'marker.size': traces.map(() => 8),
+                  opacity: traces.map(() => 1)
+              };
+
+              Plotly.restyle(chartId, update);
+          });
+
+          // Add legend click/hover highlighting
+          chartElement.on('plotly_legendclick', function(eventData) {
+              // Prevent default toggle behavior
+              return false;
+          });
+
+          chartElement.on('plotly_legenddoubleclick', function(eventData) {
+              // Prevent default isolate behavior
+              return false;
+          });
+
+          // Add legend hover effect using CSS approach
+          // We'll attach hover listeners to the legend items after a short delay
+          setTimeout(() => {
+              const legendItems = chartElement.querySelectorAll('.legend .traces .legendtoggle');
+
+              legendItems.forEach((item, index) => {
+                  item.addEventListener('mouseenter', function() {
+                      const update = {
+                          'line.width': [],
+                          'line.color': [],
+                          'marker.size': [],
+                          opacity: []
+                      };
+
+                      traces.forEach((trace, traceIndex) => {
+                          if (traceIndex === index) {
+                              // Highlight the hovered legend's line
+                              update['line.width'].push(5);
+                              update['line.color'].push(colors[traceIndex % colors.length]);
+                              update['marker.size'].push(12);
+                              update.opacity.push(1);
+                          } else {
+                              // Fade other lines
+                              update['line.width'].push(2);
+                              update['line.color'].push(colors[traceIndex % colors.length]);
+                              update['marker.size'].push(6);
+                              update.opacity.push(0.3);
+                          }
+                      });
+
+                      Plotly.restyle(chartId, update);
+                  });
+
+                  item.addEventListener('mouseleave', function() {
+                      // Reset all traces to default styling
+                      const update = {
+                          'line.width': traces.map(() => 3),
+                          'line.color': traces.map((t, i) => colors[i % colors.length]),
+                          'marker.size': traces.map(() => 8),
+                          opacity: traces.map(() => 1)
+                      };
+
+                      Plotly.restyle(chartId, update);
+                  });
+              });
+          }, 100);
+      }
+
+      function loadTimePatterns() {
+          fetch(`/api/yearly/time-patterns?year=${currentYear}`)
+              .then(response => response.json())
+              .then(data => {
+                  renderHourlyChart(data.hourly);
+                  renderWeeklyChart(data.weekly, data.day_names);
+              })
+              .catch(error => console.error('Error loading time patterns:', error));
+      }
+
+      function renderHourlyChart(hourlyData) {
+          const hours = Array.from({
+              length: 24
+          }, (_, i) => `${i}:00`);
+
+          const trace = {
+              type: 'barpolar',
+              r: hourlyData,
+              theta: hours,
+              marker: {
+                  color: hourlyData,
+                  colorscale: 'Blues',
+                  line: {
+                      color: '#58a6ff',
+                      width: 1
+                  }
+              },
+              hovertemplate: '<b>%{theta}</b><br>Scrobbles: %{r}<extra></extra>'
+          };
+
+          const layout = {
+              polar: {
+                  radialaxis: {
+                      gridcolor: '#30363d',
+                      color: '#f0f6fc'
+                  },
+                  angularaxis: {
+                      gridcolor: '#30363d',
+                      color: '#f0f6fc',
+                      direction: 'clockwise'
+                  },
+                  bgcolor: '#161b22'
+              },
+              paper_bgcolor: '#161b22',
+              font: {
+                  color: '#f0f6fc'
+              },
+              showlegend: false,
+              margin: {
+                  l: 80,
+                  r: 80,
+                  t: 20,
+                  b: 80
+              }
+          };
+
+          Plotly.newPlot('hourly-chart', [trace], layout, {
+              responsive: true
+          });
+      }
+
+      function renderWeeklyChart(weeklyData, dayNames) {
+          const trace = {
+              type: 'bar',
+              x: dayNames,
+              y: weeklyData,
+              marker: {
+                  color: '#58a6ff',
+                  line: {
+                      color: '#388bfd',
+                      width: 1
+                  }
+              },
+              hovertemplate: '<b>%{x}</b><br>Scrobbles: %{y}<extra></extra>'
+          };
+
+          const layout = {
+              paper_bgcolor: '#161b22',
+              plot_bgcolor: '#161b22',
+              font: {
+                  color: '#f0f6fc'
+              },
+              xaxis: {
+                  gridcolor: '#30363d',
+                  color: '#f0f6fc'
+              },
+              yaxis: {
+                  gridcolor: '#30363d',
+                  color: '#f0f6fc',
+                  title: 'Scrobbles'
+              },
+              margin: {
+                  l: 60,
+                  r: 40,
+                  t: 20,
+                  b: 80
+              }
+          };
+
+          Plotly.newPlot('weekly-chart', [trace], layout, {
+              responsive: true
+          });
+      }
+
+      // Load initial chart data (top lists loaded via HTMX)
+      loadTimePatterns();
+      loadEvolution();
+
+      // Resize charts when tabs are switched to ensure proper width
+      document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(button => {
+          button.addEventListener('shown.bs.tab', function(event) {
+              const target = event.target.getAttribute('data-bs-target');
+              const chartId = target.replace('-evolution', '-evolution-chart').substring(1);
+              setTimeout(() => {
+                  Plotly.Plots.resize(chartId);
+              }, 10);
+          });
+      });
+  </script>
 {% endblock %}

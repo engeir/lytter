@@ -2,9 +2,14 @@ amends "package://github.com/jdx/hk/releases/download/v1.2.0/hk@1.2.0#/Config.pk
 import "package://github.com/jdx/hk/releases/download/v1.2.0/hk@1.2.0#/Builtins.pkl"
 
 local linters = new Mapping<String, Step> {
-    // uses builtin prettier linter config
+    // uses builtin prettier linter config (exclude HTML templates - use djlint)
     ["prettier"] = (Builtins.prettier) {
         glob = List("*.md", "*.yaml", "*.yml", "*.js")
+    }
+    ["djlint"] {
+        glob = "*.html"
+        check = "uv run djlint --check {{files}}"
+        fix = "uv run djlint --reformat --quiet {{files}}"
     }
     ["taplo"] = Builtins.taplo
     ["ruff"] = Builtins.ruff

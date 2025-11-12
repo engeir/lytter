@@ -1063,6 +1063,72 @@ async def yearly_top_items(year: int, limit: int = 20):
     }
 
 
+@app.get("/html/yearly/top-items/{item_type}", response_class=HTMLResponse)
+async def yearly_top_items_html(
+    request: Request, item_type: str, year: int, limit: int = 20
+):
+    """Get top items as HTML fragment for HTMX (songs, albums, or artists)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    if item_type == "songs":
+        cursor.execute(
+            """
+            SELECT artist, track, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+            GROUP BY artist, track
+            ORDER BY plays DESC
+            LIMIT ?
+        """,
+            (str(year), limit),
+        )
+        items = [
+            {"artist": row[0], "track": row[1], "plays": row[2]}
+            for row in cursor.fetchall()
+        ]
+    elif item_type == "albums":
+        cursor.execute(
+            """
+            SELECT artist, album, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                AND album != ''
+            GROUP BY artist, album
+            ORDER BY plays DESC
+            LIMIT ?
+        """,
+            (str(year), limit),
+        )
+        items = [
+            {"artist": row[0], "album": row[1], "plays": row[2]}
+            for row in cursor.fetchall()
+        ]
+    elif item_type == "artists":
+        cursor.execute(
+            """
+            SELECT artist, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+            GROUP BY artist
+            ORDER BY plays DESC
+            LIMIT ?
+        """,
+            (str(year), limit),
+        )
+        items = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
+    else:
+        conn.close()
+        return HTMLResponse(content="<p class='text-muted'>Invalid item type</p>")
+
+    conn.close()
+
+    return templates.TemplateResponse(
+        "_yearly_top_items.html",
+        {"request": request, "items": items, "item_type": item_type},
+    )
+
+
 @app.get("/api/yearly/time-patterns")
 async def yearly_time_patterns(year: int):
     """Get listening patterns by hour and day of week for a specific year."""

@@ -1,0 +1,27 @@
+{# HTML Fragment for Yearly Top Items - Loaded via HTMX #} {% from 'macros.html' import
+yearly_top_item %}
+{% if items %}
+
+  {% for item in items %}
+
+    {% if item_type == 'songs' %}
+      {{ yearly_top_item(index=loop.index, primary_text=item.track,
+            secondary_text=item.artist, plays=item.plays, primary_url='/song/' +
+            (item.artist|urlencode) + '/' + (item.track|urlencode), secondary_url='/artist/' +
+      (item.artist|urlencode) ) }}
+    {% elif item_type == 'albums' %}
+      {{ yearly_top_item(index=loop.index, primary_text=item.album, secondary_text=item.artist, plays=item.plays,
+            primary_url='/album/' + (item.artist|urlencode) + '/' + (item.album|urlencode),
+      secondary_url='/artist/' + (item.artist|urlencode) ) }}
+    {% elif item_type == 'artists'
+      %}
+      {{ yearly_top_item(index=loop.index, primary_text=item.artist, secondary_text=None,
+            plays=item.plays, primary_url='/artist/' + (item.artist|urlencode) , secondary_url=None )
+      }}
+    {% endif %}
+
+  {% endfor %}
+
+{% else %}
+  <p class="text-muted text-center">No data available</p>
+{% endif %}

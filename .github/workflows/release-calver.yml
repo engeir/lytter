@@ -227,16 +227,27 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$VERSION" -m "Release $VERSION"
           git push origin "$VERSION"
-      - name: Read changelog
+      - name: Install mise
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+        with:
+          install: true
+      - name: Generate release notes
         id: read_changelog
         run: |
-          if [ -f CHANGELOG.md ]; then
-            echo "changelog<<EOF" >> $GITHUB_OUTPUT
-            cat CHANGELOG.md >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+          VERSION="${{ steps.extract_version.outputs.version }}"
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            # Generate changelog for just this release
+            CHANGELOG=$(mise x -- git-cliff --strip header "$PREVIOUS_TAG..$VERSION")
           else
-            echo "changelog=Release ${{ steps.extract_version.outputs.version }}" >> $GITHUB_OUTPUT
+            # First release - generate from beginning
+            CHANGELOG=$(mise x -- git-cliff --strip header --tag "$VERSION")
           fi
+
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
       - name: Create GitHub Release
         uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
         with:

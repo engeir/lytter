@@ -2,6 +2,8 @@
 '_'.python.venv = { path = ".venv", create = true }
 
 [tools]
+age = "latest"
+fnox = "latest"
 hadolint = "latest"
 hk = "latest"
 pinact = "latest"

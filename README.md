@@ -62,6 +62,8 @@ docker exec lytter uv run lytter-update
 ```bash
 # Install dependencies
 mise run i  # or: uv sync
+# Set up environment variables
+fnox export -f env -o .env
 # Run dev server
 mise run r  # or: uv run lytter
 # Access at http://localhost:8000

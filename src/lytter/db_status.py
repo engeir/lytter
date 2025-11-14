@@ -4,7 +4,7 @@
 import datetime
 import sqlite3
 
-from lytter.app import get_db_connection
+from lytter.app import DB_NAME
 
 # Constants
 SECONDS_PER_HOUR = 3600
@@ -13,30 +13,28 @@ SECONDS_PER_HOUR = 3600
 def main():
     """Show database status."""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
 
-        # Get total scrobbles
-        cursor.execute("SELECT COUNT(*) FROM musiclibrary")
-        total_scrobbles = cursor.fetchone()[0]
+            # Get total scrobbles
+            cursor.execute("SELECT COUNT(*) FROM musiclibrary")
+            total_scrobbles = cursor.fetchone()[0]
 
-        # Get latest scrobble
-        cursor.execute("SELECT MAX(timestamp) FROM musiclibrary")
-        latest_timestamp = cursor.fetchone()[0]
+            # Get latest scrobble
+            cursor.execute("SELECT MAX(timestamp) FROM musiclibrary")
+            latest_timestamp = cursor.fetchone()[0]
 
-        # Get oldest scrobble
-        cursor.execute("SELECT MIN(timestamp) FROM musiclibrary")
-        oldest_timestamp = cursor.fetchone()[0]
+            # Get oldest scrobble
+            cursor.execute("SELECT MIN(timestamp) FROM musiclibrary")
+            oldest_timestamp = cursor.fetchone()[0]
 
-        # Get unique artists
-        cursor.execute("SELECT COUNT(DISTINCT artist) FROM musiclibrary")
-        unique_artists = cursor.fetchone()[0]
+            # Get unique artists
+            cursor.execute("SELECT COUNT(DISTINCT artist) FROM musiclibrary")
+            unique_artists = cursor.fetchone()[0]
 
-        # Get unique tracks
-        cursor.execute("SELECT COUNT(DISTINCT track) FROM musiclibrary")
-        unique_tracks = cursor.fetchone()[0]
-
-        conn.close()
+            # Get unique tracks
+            cursor.execute("SELECT COUNT(DISTINCT track) FROM musiclibrary")
+            unique_tracks = cursor.fetchone()[0]
 
         print("📊 Last.fm Database Status")
         print("=" * 40)

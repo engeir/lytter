@@ -9,15 +9,12 @@ from datetime import datetime, timedelta
 import requests
 from dotenv import load_dotenv
 
+from lytter.app import DB_NAME
+
 load_dotenv()
 
 API_KEY = os.environ.get("API_KEY")
 USER_NAME = os.environ.get("USER_NAME")
-
-
-def get_db_connection():
-    """Get database connection."""
-    return sqlite3.connect("music.db")
 
 
 def find_timestamp_gaps(hours_back=24, gap_threshold=3600):
@@ -27,23 +24,22 @@ def find_timestamp_gaps(hours_back=24, gap_threshold=3600):
         hours_back: How many hours back to check
         gap_threshold: Gap in seconds that's considered suspicious (default 1 hour)
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Get timestamps from last N hours
-    cutoff_time = int((datetime.now() - timedelta(hours=hours_back)).timestamp())
+        # Get timestamps from last N hours
+        cutoff_time = int((datetime.now() - timedelta(hours=hours_back)).timestamp())
 
-    cursor.execute(
-        """
-        SELECT timestamp FROM musiclibrary
-        WHERE timestamp > ?
-        ORDER BY timestamp DESC
-    """,
-        (cutoff_time,),
-    )
+        cursor.execute(
+            """
+            SELECT timestamp FROM musiclibrary
+            WHERE timestamp > ?
+            ORDER BY timestamp DESC
+        """,
+            (cutoff_time,),
+        )
 
-    timestamps = [row[0] for row in cursor.fetchall()]
-    conn.close()
+        timestamps = [row[0] for row in cursor.fetchall()]
 
     gaps = []
     for i in range(len(timestamps) - 1):
@@ -127,59 +123,57 @@ def fill_gaps(gaps, dry_run=True):
         print("No gaps found!")
         return 0
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    total_added = 0
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        total_added = 0
 
-    for gap in gaps:
-        print(
-            f"\n🔍 Checking gap: {gap['gap_seconds']}s between {gap['newer_time']} and {gap['older_time']}"
-        )
-
-        # Fetch scrobbles in this time range
-        scrobbles = fetch_scrobbles_in_range(gap["older_ts"], gap["newer_ts"])
-        print(f"Found {len(scrobbles)} scrobbles from API in this range")
-
-        added_count = 0
-        for scrobble in scrobbles:
-            # Check if this scrobble already exists
-            cursor.execute(
-                "SELECT 1 FROM musiclibrary WHERE timestamp = ?",
-                (scrobble["timestamp"],),
+        for gap in gaps:
+            print(
+                f"\n🔍 Checking gap: {gap['gap_seconds']}s between {gap['newer_time']} and {gap['older_time']}"
             )
-            if not cursor.fetchone():
-                if not dry_run:
-                    try:
-                        cursor.execute(
-                            """
-                            INSERT INTO musiclibrary
-                            (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """,
-                            (
-                                scrobble["artist"],
-                                scrobble["artist_mbid"],
-                                scrobble["album"],
-                                scrobble["album_mbid"],
-                                scrobble["track"],
-                                scrobble["track_mbid"],
-                                scrobble["timestamp"],
-                            ),
-                        )
-                        conn.commit()
+
+            # Fetch scrobbles in this time range
+            scrobbles = fetch_scrobbles_in_range(gap["older_ts"], gap["newer_ts"])
+            print(f"Found {len(scrobbles)} scrobbles from API in this range")
+
+            added_count = 0
+            for scrobble in scrobbles:
+                # Check if this scrobble already exists
+                cursor.execute(
+                    "SELECT 1 FROM musiclibrary WHERE timestamp = ?",
+                    (scrobble["timestamp"],),
+                )
+                if not cursor.fetchone():
+                    if not dry_run:
+                        try:
+                            cursor.execute(
+                                """
+                                INSERT INTO musiclibrary
+                                (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """,
+                                (
+                                    scrobble["artist"],
+                                    scrobble["artist_mbid"],
+                                    scrobble["album"],
+                                    scrobble["album_mbid"],
+                                    scrobble["track"],
+                                    scrobble["track_mbid"],
+                                    scrobble["timestamp"],
+                                ),
+                            )
+                            conn.commit()
+                            added_count += 1
+                        except sqlite3.IntegrityError:
+                            pass  # Already exists
+                    else:
                         added_count += 1
-                    except sqlite3.IntegrityError:
-                        pass  # Already exists
-                else:
-                    added_count += 1
 
-        if dry_run:
-            print(f"Would add {added_count} missing scrobbles")
-        else:
-            print(f"Added {added_count} missing scrobbles")
-        total_added += added_count
-
-    conn.close()
+            if dry_run:
+                print(f"Would add {added_count} missing scrobbles")
+            else:
+                print(f"Added {added_count} missing scrobbles")
+            total_added += added_count
     return total_added
 
 

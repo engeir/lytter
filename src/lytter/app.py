@@ -15,7 +15,6 @@ import uvicorn
 from dotenv import load_dotenv
 from rapidfuzz import fuzz, process
 
-# Note: These imports may show errors in the editor but will work when dependencies are installed
 try:
     import pandas as pd
     import plotly.express as px
@@ -31,6 +30,7 @@ load_dotenv()
 
 # Get package directory for templates and static files
 _PKG_DIR = Path(__file__).parent
+DB_NAME = Path("music.db")
 
 # Configuration
 API_KEY = os.environ.get("API_KEY", "")
@@ -93,33 +93,24 @@ def normalize_text(text: str) -> str:
     return "".join(char for char in nfd if unicodedata.category(char) != "Mn")
 
 
-# Database helper functions
-def get_db_connection():
-    """Get SQLite database connection."""
-    return sqlite3.connect("music.db")
-
-
 def init_db():
     """Initialize database with table if it doesn't exist."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS musiclibrary (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            artist TEXT NOT NULL,
-            artist_mbid TEXT,
-            album TEXT,
-            album_mbid TEXT,
-            track TEXT NOT NULL,
-            track_mbid TEXT,
-            timestamp INTEGER UNIQUE NOT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS musiclibrary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                artist TEXT NOT NULL,
+                artist_mbid TEXT,
+                album TEXT,
+                album_mbid TEXT,
+                track TEXT NOT NULL,
+                track_mbid TEXT,
+                timestamp INTEGER UNIQUE NOT NULL
+            )
+        """)
 
 
-# Initialize database on startup
 init_db()
 
 
@@ -140,11 +131,10 @@ class GetScrobbles:
 
     def get_latest_timestamp(self) -> int:
         """Get the most recent timestamp from the database."""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT MAX(timestamp) FROM musiclibrary")
-        result = cursor.fetchone()[0]
-        conn.close()
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(timestamp) FROM musiclibrary")
+            result = cursor.fetchone()[0]
         return int(result) if result else 0
 
     def get_scrobbles(
@@ -198,90 +188,93 @@ class GetScrobbles:
         else:
             print(f"Full update: {total_pages} total pages to retrieve")
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
 
-        new_scrobbles_count = 0
-        consecutive_old_scrobbles = 0
+            new_scrobbles_count = 0
+            consecutive_old_scrobbles = 0
 
-        # Request each page of data
-        for page_ in range(1, int(total_pages) + 1):
-            print(f"Page {page_}/{total_pages}", end="\r")
-            try:
-                request_url = url.format(
-                    self.method, USER_NAME, API_KEY, limit, extended, page_
-                )
-                response = requests.get(request_url, timeout=30)
-                response.raise_for_status()
-                scrobbles = response.json()
-            except Exception as e:
-                print(f"\nError fetching page {page_}: {e}")
-                continue
-
-            page_new_count = 0
-            for scrobble in scrobbles[self.method]["track"]:
-                # Skip now playing tracks
-                if "@attr" in scrobble and scrobble["@attr"]["nowplaying"] == "true":
-                    continue
-
-                scrobble_timestamp = int(scrobble["date"]["uts"])
-
-                # Check if this exact scrobble already exists (always check, don't assume based on timestamp)
-                cursor.execute(
-                    "SELECT 1 FROM musiclibrary WHERE timestamp = ?",
-                    (scrobble_timestamp,),
-                )
-                if cursor.fetchone():
-                    # This scrobble exists, but continue checking others (don't skip based on timestamp alone)
-                    consecutive_old_scrobbles += 1
-                    # Only stop after many consecutive existing scrobbles AND we're past our latest timestamp
-                    if (
-                        consecutive_old_scrobbles >= CONSECUTIVE_SCROBBLES_THRESHOLD
-                        and not full
-                        and latest_timestamp > 0
-                        and scrobble_timestamp <= latest_timestamp
-                    ):
-                        print(
-                            f"\nFound {consecutive_old_scrobbles} consecutive existing scrobbles beyond latest timestamp, stopping"
-                        )
-                        conn.close()
-                        return new_scrobbles_count
-                    continue
-
-                # Reset consecutive counter when we find a truly new scrobble
-                consecutive_old_scrobbles = 0
-
-                # Insert new scrobble
+            # Request each page of data
+            for page_ in range(1, int(total_pages) + 1):
+                print(f"Page {page_}/{total_pages}", end="\r")
                 try:
-                    cursor.execute(
-                        """
-                        INSERT INTO musiclibrary
-                        (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            scrobble["artist"]["#text"],
-                            scrobble["artist"]["mbid"],
-                            scrobble["album"]["#text"],
-                            scrobble["album"]["mbid"],
-                            scrobble["name"],
-                            scrobble["mbid"],
-                            scrobble_timestamp,
-                        ),
+                    request_url = url.format(
+                        self.method, USER_NAME, API_KEY, limit, extended, page_
                     )
-                    conn.commit()
-                    new_scrobbles_count += 1
-                    page_new_count += 1
-                except sqlite3.Error as e:
-                    print(f"\nDatabase error: {e}")
-                    conn.rollback()
+                    response = requests.get(request_url, timeout=30)
+                    response.raise_for_status()
+                    scrobbles = response.json()
+                except Exception as e:
+                    print(f"\nError fetching page {page_}: {e}")
+                    continue
 
-            # For incremental updates, if we found no new scrobbles on this page, likely done
-            if not full and page_new_count == 0:
-                print(f"\nNo new scrobbles found on page {page_}, likely up to date")
-                break
+                page_new_count = 0
+                for scrobble in scrobbles[self.method]["track"]:
+                    # Skip now playing tracks
+                    if (
+                        "@attr" in scrobble
+                        and scrobble["@attr"]["nowplaying"] == "true"
+                    ):
+                        continue
 
-        conn.close()
+                    scrobble_timestamp = int(scrobble["date"]["uts"])
+
+                    # Check if this exact scrobble already exists (always check, don't assume based on timestamp)
+                    cursor.execute(
+                        "SELECT 1 FROM musiclibrary WHERE timestamp = ?",
+                        (scrobble_timestamp,),
+                    )
+                    if cursor.fetchone():
+                        # This scrobble exists, but continue checking others (don't skip based on timestamp alone)
+                        consecutive_old_scrobbles += 1
+                        # Only stop after many consecutive existing scrobbles AND we're past our latest timestamp
+                        if (
+                            consecutive_old_scrobbles >= CONSECUTIVE_SCROBBLES_THRESHOLD
+                            and not full
+                            and latest_timestamp > 0
+                            and scrobble_timestamp <= latest_timestamp
+                        ):
+                            print(
+                                f"\nFound {consecutive_old_scrobbles} consecutive existing scrobbles beyond latest timestamp, stopping"
+                            )
+                            return new_scrobbles_count
+                        continue
+
+                    # Reset consecutive counter when we find a truly new scrobble
+                    consecutive_old_scrobbles = 0
+
+                    # Insert new scrobble
+                    try:
+                        cursor.execute(
+                            """
+                            INSERT INTO musiclibrary
+                            (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                scrobble["artist"]["#text"],
+                                scrobble["artist"]["mbid"],
+                                scrobble["album"]["#text"],
+                                scrobble["album"]["mbid"],
+                                scrobble["name"],
+                                scrobble["mbid"],
+                                scrobble_timestamp,
+                            ),
+                        )
+                        conn.commit()
+                        new_scrobbles_count += 1
+                        page_new_count += 1
+                    except sqlite3.Error as e:
+                        print(f"\nDatabase error: {e}")
+                        conn.rollback()
+
+                # For incremental updates, if we found no new scrobbles on this page, likely done
+                if not full and page_new_count == 0:
+                    print(
+                        f"\nNo new scrobbles found on page {page_}, likely up to date"
+                    )
+                    break
+
         print(f"\nUpdate complete! Added {new_scrobbles_count} new scrobbles.")
         return new_scrobbles_count
 
@@ -291,14 +284,13 @@ class CurrentStats:
 
     def listening_history_db(self, artist: str):
         """Get the artist listening history as a cumulative line plot."""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT timestamp FROM musiclibrary WHERE artist = ? ORDER BY timestamp",
-            (artist,),
-        )
-        timestamps = [row[0] for row in cursor.fetchall()]
-        conn.close()
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT timestamp FROM musiclibrary WHERE artist = ? ORDER BY timestamp",
+                (artist,),
+            )
+            timestamps = [row[0] for row in cursor.fetchall()]
 
         dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
         counts = list(range(1, len(dates) + 1))
@@ -326,11 +318,10 @@ class CurrentStats:
 
     def top_songs(self, artist: str):
         """Get the top songs of an artist as a bar plot."""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT track FROM musiclibrary WHERE artist = ?", (artist,))
-        tracks = [row[0] for row in cursor.fetchall()]
-        conn.close()
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT track FROM musiclibrary WHERE artist = ?", (artist,))
+            tracks = [row[0] for row in cursor.fetchall()]
 
         songs = OrderedDict(Counter(tracks).most_common())
         unique_songs = list(songs.keys())[::-1]
@@ -369,22 +360,18 @@ class CurrentStats:
 async def index(request: Request):
     """Display main dashboard page."""
     # Get basic stats
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT COUNT(*) FROM musiclibrary")
-    total_scrobbles = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(DISTINCT artist) FROM musiclibrary")
-    unique_artists = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(DISTINCT track) FROM musiclibrary")
-    unique_tracks = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(DISTINCT album) FROM musiclibrary WHERE album != ''")
-    unique_albums = cursor.fetchone()[0]
-
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM musiclibrary")
+        total_scrobbles = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT artist) FROM musiclibrary")
+        unique_artists = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT track) FROM musiclibrary")
+        unique_tracks = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(DISTINCT album) FROM musiclibrary WHERE album != ''"
+        )
+        unique_albums = cursor.fetchone()[0]
 
     # Get current playing track
     current_track = None
@@ -424,25 +411,25 @@ async def artist_stats(request: Request, artist_name: str):
     history_json = json.dumps(stats.listening_history_db(artist_name))
 
     # Get basic artist stats
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM musiclibrary WHERE artist = ?", (artist_name,))
-    total_plays = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM musiclibrary WHERE artist = ?", (artist_name,)
+        )
+        total_plays = cursor.fetchone()[0]
 
-    cursor.execute(
-        "SELECT COUNT(DISTINCT track) FROM musiclibrary WHERE artist = ?",
-        (artist_name,),
-    )
-    unique_tracks = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(DISTINCT track) FROM musiclibrary WHERE artist = ?",
+            (artist_name,),
+        )
+        unique_tracks = cursor.fetchone()[0]
 
-    cursor.execute(
-        "SELECT COUNT(DISTINCT album) FROM musiclibrary WHERE artist = ? AND album != ''",
-        (artist_name,),
-    )
-    unique_albums = cursor.fetchone()[0]
-
-    conn.close()
+        cursor.execute(
+            "SELECT COUNT(DISTINCT album) FROM musiclibrary WHERE artist = ? AND album != ''",
+            (artist_name,),
+        )
+        unique_albums = cursor.fetchone()[0]
 
     return templates.TemplateResponse(
         "artist.html",
@@ -460,13 +447,12 @@ async def artist_stats(request: Request, artist_name: str):
 @app.get("/top-artists")
 async def top_artists():
     """Get top artists data (JSON for backwards compatibility)."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT artist, COUNT(*) as plays FROM musiclibrary GROUP BY artist ORDER BY plays DESC LIMIT 50"
-    )
-    result = cursor.fetchall()
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT artist, COUNT(*) as plays FROM musiclibrary GROUP BY artist ORDER BY plays DESC LIMIT 50"
+        )
+        result = cursor.fetchall()
 
     artists = [{"artist": row[0], "plays": row[1]} for row in result]
     return {"artists": artists}
@@ -475,13 +461,12 @@ async def top_artists():
 @app.get("/html/top-artists", response_class=HTMLResponse)
 async def top_artists_html(request: Request):
     """Get top artists as HTML fragment for HTMX."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT artist, COUNT(*) as plays FROM musiclibrary GROUP BY artist ORDER BY plays DESC LIMIT 50"
-    )
-    result = cursor.fetchall()
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT artist, COUNT(*) as plays FROM musiclibrary GROUP BY artist ORDER BY plays DESC LIMIT 50"
+        )
+        result = cursor.fetchall()
 
     artists = [{"artist": row[0], "plays": row[1]} for row in result]
     return templates.TemplateResponse(
@@ -492,19 +477,18 @@ async def top_artists_html(request: Request):
 @app.get("/charts/listening-timeline")
 async def listening_timeline():
     """Generate listening timeline chart."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Get daily scrobble counts for the last 365 days
-    cursor.execute("""
-        SELECT DATE(timestamp, 'unixepoch') as date, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE timestamp >= strftime('%s', 'now', '-365 days')
-        GROUP BY date
-        ORDER BY date ASC
-    """)
-    result = cursor.fetchall()
-    conn.close()
+        # Get daily scrobble counts for the last 365 days
+        cursor.execute("""
+            SELECT DATE(timestamp, 'unixepoch') as date, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE timestamp >= strftime('%s', 'now', '-365 days')
+            GROUP BY date
+            ORDER BY date ASC
+        """)
+        result = cursor.fetchall()
 
     df = pd.DataFrame(result, columns=["date", "plays"])
     df["date"] = pd.to_datetime(df["date"])
@@ -574,90 +558,92 @@ async def listening_timeline():
 @app.get("/recent-stats")
 async def recent_stats():
     """Get top artists, albums, and songs from past week and month (JSON)."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Top 5 artists from past week
-    cursor.execute("""
-        SELECT artist, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE timestamp >= strftime('%s', 'now', '-7 days')
-        GROUP BY artist
-        ORDER BY plays DESC
-        LIMIT 5
-    """)
-    week_artists = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
+        # Top 5 artists from past week
+        cursor.execute("""
+            SELECT artist, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE timestamp >= strftime('%s', 'now', '-7 days')
+            GROUP BY artist
+            ORDER BY plays DESC
+            LIMIT 5
+        """)
+        week_artists = [
+            {"artist": row[0], "plays": row[1]} for row in cursor.fetchall()
+        ]
 
-    # Top 5 albums from past week
-    cursor.execute("""
-        SELECT artist, album, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE timestamp >= strftime('%s', 'now', '-7 days')
-            AND album != ''
-        GROUP BY artist, album
-        ORDER BY plays DESC
-        LIMIT 5
-    """)
-    week_albums = [
-        {"artist": row[0], "album": row[1], "plays": row[2]}
-        for row in cursor.fetchall()
-    ]
+        # Top 5 albums from past week
+        cursor.execute("""
+            SELECT artist, album, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE timestamp >= strftime('%s', 'now', '-7 days')
+                AND album != ''
+            GROUP BY artist, album
+            ORDER BY plays DESC
+            LIMIT 5
+        """)
+        week_albums = [
+            {"artist": row[0], "album": row[1], "plays": row[2]}
+            for row in cursor.fetchall()
+        ]
 
-    # Top 5 songs from past week
-    cursor.execute("""
-        SELECT artist, track, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE timestamp >= strftime('%s', 'now', '-7 days')
-        GROUP BY artist, track
-        ORDER BY plays DESC
-        LIMIT 5
-    """)
-    week_songs = [
-        {"artist": row[0], "track": row[1], "plays": row[2]}
-        for row in cursor.fetchall()
-    ]
+        # Top 5 songs from past week
+        cursor.execute("""
+            SELECT artist, track, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE timestamp >= strftime('%s', 'now', '-7 days')
+            GROUP BY artist, track
+            ORDER BY plays DESC
+            LIMIT 5
+        """)
+        week_songs = [
+            {"artist": row[0], "track": row[1], "plays": row[2]}
+            for row in cursor.fetchall()
+        ]
 
-    # Top 5 artists from past month
-    cursor.execute("""
-        SELECT artist, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE timestamp >= strftime('%s', 'now', '-30 days')
-        GROUP BY artist
-        ORDER BY plays DESC
-        LIMIT 5
-    """)
-    month_artists = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
+        # Top 5 artists from past month
+        cursor.execute("""
+            SELECT artist, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE timestamp >= strftime('%s', 'now', '-30 days')
+            GROUP BY artist
+            ORDER BY plays DESC
+            LIMIT 5
+        """)
+        month_artists = [
+            {"artist": row[0], "plays": row[1]} for row in cursor.fetchall()
+        ]
 
-    # Top 5 albums from past month
-    cursor.execute("""
-        SELECT artist, album, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE timestamp >= strftime('%s', 'now', '-30 days')
-            AND album != ''
-        GROUP BY artist, album
-        ORDER BY plays DESC
-        LIMIT 5
-    """)
-    month_albums = [
-        {"artist": row[0], "album": row[1], "plays": row[2]}
-        for row in cursor.fetchall()
-    ]
+        # Top 5 albums from past month
+        cursor.execute("""
+            SELECT artist, album, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE timestamp >= strftime('%s', 'now', '-30 days')
+                AND album != ''
+            GROUP BY artist, album
+            ORDER BY plays DESC
+            LIMIT 5
+        """)
+        month_albums = [
+            {"artist": row[0], "album": row[1], "plays": row[2]}
+            for row in cursor.fetchall()
+        ]
 
-    # Top 5 songs from past month
-    cursor.execute("""
-        SELECT artist, track, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE timestamp >= strftime('%s', 'now', '-30 days')
-        GROUP BY artist, track
-        ORDER BY plays DESC
-        LIMIT 5
-    """)
-    month_songs = [
-        {"artist": row[0], "track": row[1], "plays": row[2]}
-        for row in cursor.fetchall()
-    ]
-
-    conn.close()
+        # Top 5 songs from past month
+        cursor.execute("""
+            SELECT artist, track, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE timestamp >= strftime('%s', 'now', '-30 days')
+            GROUP BY artist, track
+            ORDER BY plays DESC
+            LIMIT 5
+        """)
+        month_songs = [
+            {"artist": row[0], "track": row[1], "plays": row[2]}
+            for row in cursor.fetchall()
+        ]
 
     return {
         "week_artists": week_artists,
@@ -682,21 +668,20 @@ async def recent_favorites_html(request: Request):
 @app.get("/artist-top-songs")
 async def artist_top_songs(artist: str):
     """Get top songs for a specific artist."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT track, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE artist = ?
-        GROUP BY track
-        ORDER BY plays DESC
-        LIMIT 100
-    """,
-        (artist,),
-    )
-    result = cursor.fetchall()
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT track, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE artist = ?
+            GROUP BY track
+            ORDER BY plays DESC
+            LIMIT 100
+        """,
+            (artist,),
+        )
+        result = cursor.fetchall()
 
     songs = [{"track": row[0], "plays": row[1]} for row in result]
     return {"songs": songs}
@@ -705,21 +690,20 @@ async def artist_top_songs(artist: str):
 @app.get("/artist-top-albums")
 async def artist_top_albums(artist: str):
     """Get top albums for a specific artist."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT album, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE artist = ? AND album != ''
-        GROUP BY album
-        ORDER BY plays DESC
-        LIMIT 100
-    """,
-        (artist,),
-    )
-    result = cursor.fetchall()
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT album, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE artist = ? AND album != ''
+            GROUP BY album
+            ORDER BY plays DESC
+            LIMIT 100
+        """,
+            (artist,),
+        )
+        result = cursor.fetchall()
 
     albums = [{"album": row[0], "plays": row[1]} for row in result]
     return {"albums": albums}
@@ -728,33 +712,32 @@ async def artist_top_albums(artist: str):
 @app.get("/album/{artist_name}/{album_name:path}", response_class=HTMLResponse)
 async def album_stats(request: Request, artist_name: str, album_name: str):
     """Album statistics page."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Get album stats
-    cursor.execute(
-        "SELECT COUNT(*) FROM musiclibrary WHERE artist = ? AND album = ?",
-        (artist_name, album_name),
-    )
-    total_plays = cursor.fetchone()[0]
+        # Get album stats
+        cursor.execute(
+            "SELECT COUNT(*) FROM musiclibrary WHERE artist = ? AND album = ?",
+            (artist_name, album_name),
+        )
+        total_plays = cursor.fetchone()[0]
 
-    cursor.execute(
-        "SELECT COUNT(DISTINCT track) FROM musiclibrary WHERE artist = ? AND album = ?",
-        (artist_name, album_name),
-    )
-    unique_tracks = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(DISTINCT track) FROM musiclibrary WHERE artist = ? AND album = ?",
+            (artist_name, album_name),
+        )
+        unique_tracks = cursor.fetchone()[0]
 
-    # Get listening history
-    cursor.execute(
-        """
-        SELECT timestamp FROM musiclibrary
-        WHERE artist = ? AND album = ?
-        ORDER BY timestamp
-    """,
-        (artist_name, album_name),
-    )
-    timestamps = [row[0] for row in cursor.fetchall()]
-    conn.close()
+        # Get listening history
+        cursor.execute(
+            """
+            SELECT timestamp FROM musiclibrary
+            WHERE artist = ? AND album = ?
+            ORDER BY timestamp
+        """,
+            (artist_name, album_name),
+        )
+        timestamps = [row[0] for row in cursor.fetchall()]
 
     dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
     counts = list(range(1, len(dates) + 1))
@@ -795,36 +778,35 @@ async def album_stats(request: Request, artist_name: str, album_name: str):
 @app.get("/song/{artist_name}/{track_name:path}", response_class=HTMLResponse)
 async def song_stats(request: Request, artist_name: str, track_name: str):
     """Song statistics page."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Get song stats
-    cursor.execute(
-        "SELECT COUNT(*) FROM musiclibrary WHERE artist = ? AND track = ?",
-        (artist_name, track_name),
-    )
-    total_plays = cursor.fetchone()[0]
+        # Get song stats
+        cursor.execute(
+            "SELECT COUNT(*) FROM musiclibrary WHERE artist = ? AND track = ?",
+            (artist_name, track_name),
+        )
+        total_plays = cursor.fetchone()[0]
 
-    cursor.execute(
-        """
-        SELECT COUNT(DISTINCT album) FROM musiclibrary
-        WHERE artist = ? AND track = ? AND album != ''
-    """,
-        (artist_name, track_name),
-    )
-    unique_albums = cursor.fetchone()[0]
+        cursor.execute(
+            """
+            SELECT COUNT(DISTINCT album) FROM musiclibrary
+            WHERE artist = ? AND track = ? AND album != ''
+        """,
+            (artist_name, track_name),
+        )
+        unique_albums = cursor.fetchone()[0]
 
-    # Get listening history
-    cursor.execute(
-        """
-        SELECT timestamp FROM musiclibrary
-        WHERE artist = ? AND track = ?
-        ORDER BY timestamp
-    """,
-        (artist_name, track_name),
-    )
-    timestamps = [row[0] for row in cursor.fetchall()]
-    conn.close()
+        # Get listening history
+        cursor.execute(
+            """
+            SELECT timestamp FROM musiclibrary
+            WHERE artist = ? AND track = ?
+            ORDER BY timestamp
+        """,
+            (artist_name, track_name),
+        )
+        timestamps = [row[0] for row in cursor.fetchall()]
 
     dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
     counts = list(range(1, len(dates) + 1))
@@ -865,21 +847,20 @@ async def song_stats(request: Request, artist_name: str, track_name: str):
 @app.get("/album-tracks")
 async def album_tracks(artist: str, album: str):
     """Get tracks from a specific album."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT track, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE artist = ? AND album = ?
-        GROUP BY track
-        ORDER BY plays DESC
-        LIMIT 100
-    """,
-        (artist, album),
-    )
-    result = cursor.fetchall()
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT track, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE artist = ? AND album = ?
+            GROUP BY track
+            ORDER BY plays DESC
+            LIMIT 100
+        """,
+            (artist, album),
+        )
+        result = cursor.fetchall()
 
     tracks = [{"track": row[0], "plays": row[1]} for row in result]
     return {"tracks": tracks}
@@ -908,17 +889,16 @@ async def search_artists(q: str = "", limit: int = 10) -> dict:
     if not q or len(q) < min_query_length:
         return {"results": []}
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Get all artists with their play counts
-    cursor.execute("""
-        SELECT artist, COUNT(*) as plays
-        FROM musiclibrary
-        GROUP BY artist
-    """)
-    all_artists = {row[0]: row[1] for row in cursor.fetchall()}
-    conn.close()
+        # Get all artists with their play counts
+        cursor.execute("""
+            SELECT artist, COUNT(*) as plays
+            FROM musiclibrary
+            GROUP BY artist
+        """)
+        all_artists = {row[0]: row[1] for row in cursor.fetchall()}
 
     if not all_artists:
         return {"results": []}
@@ -979,15 +959,14 @@ async def search_artists(q: str = "", limit: int = 10) -> dict:
 async def yearly_stats(request: Request):
     """Yearly statistics page with year selector."""
     # Get available years from database
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT DISTINCT strftime('%Y', timestamp, 'unixepoch') as year
-        FROM musiclibrary
-        ORDER BY year DESC
-    """)
-    years = [row[0] for row in cursor.fetchall()]
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT strftime('%Y', timestamp, 'unixepoch') as year
+            FROM musiclibrary
+            ORDER BY year DESC
+        """)
+        years = [row[0] for row in cursor.fetchall()]
 
     return templates.TemplateResponse(
         "yearly.html",
@@ -1002,59 +981,57 @@ async def yearly_stats(request: Request):
 @app.get("/api/yearly/top-items")
 async def yearly_top_items(year: int, limit: int = 20):
     """Get top songs, albums, and artists for a specific year."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Top songs
-    cursor.execute(
-        """
-        SELECT artist, track, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-        GROUP BY artist, track
-        ORDER BY plays DESC
-        LIMIT ?
-    """,
-        (str(year), limit),
-    )
-    top_songs = [
-        {"artist": row[0], "track": row[1], "plays": row[2]}
-        for row in cursor.fetchall()
-    ]
+        # Top songs
+        cursor.execute(
+            """
+            SELECT artist, track, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+            GROUP BY artist, track
+            ORDER BY plays DESC
+            LIMIT ?
+        """,
+            (str(year), limit),
+        )
+        top_songs = [
+            {"artist": row[0], "track": row[1], "plays": row[2]}
+            for row in cursor.fetchall()
+        ]
 
-    # Top albums
-    cursor.execute(
-        """
-        SELECT artist, album, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-            AND album != ''
-        GROUP BY artist, album
-        ORDER BY plays DESC
-        LIMIT ?
-    """,
-        (str(year), limit),
-    )
-    top_albums = [
-        {"artist": row[0], "album": row[1], "plays": row[2]}
-        for row in cursor.fetchall()
-    ]
+        # Top albums
+        cursor.execute(
+            """
+            SELECT artist, album, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                AND album != ''
+            GROUP BY artist, album
+            ORDER BY plays DESC
+            LIMIT ?
+        """,
+            (str(year), limit),
+        )
+        top_albums = [
+            {"artist": row[0], "album": row[1], "plays": row[2]}
+            for row in cursor.fetchall()
+        ]
 
-    # Top artists
-    cursor.execute(
-        """
-        SELECT artist, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-        GROUP BY artist
-        ORDER BY plays DESC
-        LIMIT ?
-    """,
-        (str(year), limit),
-    )
-    top_artists = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
-
-    conn.close()
+        # Top artists
+        cursor.execute(
+            """
+            SELECT artist, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+            GROUP BY artist
+            ORDER BY plays DESC
+            LIMIT ?
+        """,
+            (str(year), limit),
+        )
+        top_artists = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
 
     return {
         "songs": top_songs,
@@ -1068,60 +1045,57 @@ async def yearly_top_items_html(
     request: Request, item_type: str, year: int, limit: int = 20
 ):
     """Get top items as HTML fragment for HTMX (songs, albums, or artists)."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    if item_type == "songs":
-        cursor.execute(
-            """
-            SELECT artist, track, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-            GROUP BY artist, track
-            ORDER BY plays DESC
-            LIMIT ?
-        """,
-            (str(year), limit),
-        )
-        items = [
-            {"artist": row[0], "track": row[1], "plays": row[2]}
-            for row in cursor.fetchall()
-        ]
-    elif item_type == "albums":
-        cursor.execute(
-            """
-            SELECT artist, album, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-                AND album != ''
-            GROUP BY artist, album
-            ORDER BY plays DESC
-            LIMIT ?
-        """,
-            (str(year), limit),
-        )
-        items = [
-            {"artist": row[0], "album": row[1], "plays": row[2]}
-            for row in cursor.fetchall()
-        ]
-    elif item_type == "artists":
-        cursor.execute(
-            """
-            SELECT artist, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-            GROUP BY artist
-            ORDER BY plays DESC
-            LIMIT ?
-        """,
-            (str(year), limit),
-        )
-        items = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
-    else:
-        conn.close()
-        return HTMLResponse(content="<p class='text-muted'>Invalid item type</p>")
-
-    conn.close()
+        if item_type == "songs":
+            cursor.execute(
+                """
+                SELECT artist, track, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                GROUP BY artist, track
+                ORDER BY plays DESC
+                LIMIT ?
+            """,
+                (str(year), limit),
+            )
+            items = [
+                {"artist": row[0], "track": row[1], "plays": row[2]}
+                for row in cursor.fetchall()
+            ]
+        elif item_type == "albums":
+            cursor.execute(
+                """
+                SELECT artist, album, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                    AND album != ''
+                GROUP BY artist, album
+                ORDER BY plays DESC
+                LIMIT ?
+            """,
+                (str(year), limit),
+            )
+            items = [
+                {"artist": row[0], "album": row[1], "plays": row[2]}
+                for row in cursor.fetchall()
+            ]
+        elif item_type == "artists":
+            cursor.execute(
+                """
+                SELECT artist, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                GROUP BY artist
+                ORDER BY plays DESC
+                LIMIT ?
+            """,
+                (str(year), limit),
+            )
+            items = [{"artist": row[0], "plays": row[1]} for row in cursor.fetchall()]
+        else:
+            return HTMLResponse(content="<p class='text-muted'>Invalid item type</p>")
 
     return templates.TemplateResponse(
         "_yearly_top_items.html",
@@ -1132,58 +1106,56 @@ async def yearly_top_items_html(
 @app.get("/api/yearly/time-patterns")
 async def yearly_time_patterns(year: int):
     """Get listening patterns by hour and day of week for a specific year."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Hour of day pattern (0-23)
-    cursor.execute(
-        """
-        SELECT strftime('%H', timestamp, 'unixepoch') as hour, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-        GROUP BY hour
-        ORDER BY hour
-    """,
-        (str(year),),
-    )
-    hourly = {int(row[0]): row[1] for row in cursor.fetchall()}
-    # Fill in missing hours with 0
-    hourly_data = [hourly.get(h, 0) for h in range(24)]
+        # Hour of day pattern (0-23)
+        cursor.execute(
+            """
+            SELECT strftime('%H', timestamp, 'unixepoch') as hour, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+            GROUP BY hour
+            ORDER BY hour
+        """,
+            (str(year),),
+        )
+        hourly = {int(row[0]): row[1] for row in cursor.fetchall()}
+        # Fill in missing hours with 0
+        hourly_data = [hourly.get(h, 0) for h in range(24)]
 
-    # Day of week pattern (0=Monday, 6=Sunday)
-    cursor.execute(
-        """
-        SELECT strftime('%w', timestamp, 'unixepoch') as dow, COUNT(*) as plays
-        FROM musiclibrary
-        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-        GROUP BY dow
-        ORDER BY dow
-    """,
-        (str(year),),
-    )
-    weekly = {int(row[0]): row[1] for row in cursor.fetchall()}
-    # SQLite %w: 0=Sunday, 1=Monday, ..., 6=Saturday
-    # Convert to 0=Monday format
-    day_names = [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday",
-    ]
-    weekly_data = [
-        weekly.get(1, 0),  # Monday
-        weekly.get(2, 0),  # Tuesday
-        weekly.get(3, 0),  # Wednesday
-        weekly.get(4, 0),  # Thursday
-        weekly.get(5, 0),  # Friday
-        weekly.get(6, 0),  # Saturday
-        weekly.get(0, 0),  # Sunday
-    ]
-
-    conn.close()
+        # Day of week pattern (0=Monday, 6=Sunday)
+        cursor.execute(
+            """
+            SELECT strftime('%w', timestamp, 'unixepoch') as dow, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+            GROUP BY dow
+            ORDER BY dow
+        """,
+            (str(year),),
+        )
+        weekly = {int(row[0]): row[1] for row in cursor.fetchall()}
+        # SQLite %w: 0=Sunday, 1=Monday, ..., 6=Saturday
+        # Convert to 0=Monday format
+        day_names = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ]
+        weekly_data = [
+            weekly.get(1, 0),  # Monday
+            weekly.get(2, 0),  # Tuesday
+            weekly.get(3, 0),  # Wednesday
+            weekly.get(4, 0),  # Thursday
+            weekly.get(5, 0),  # Friday
+            weekly.get(6, 0),  # Saturday
+            weekly.get(0, 0),  # Sunday
+        ]
 
     return {
         "hourly": hourly_data,
@@ -1215,124 +1187,121 @@ async def yearly_evolution(
     dict
         Contains dates, item names, and their play counts over time
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
 
-    # Generate all months in the year
-    all_months = [f"{year}-{month:02d}" for month in range(1, 13)]
+        # Generate all months in the year
+        all_months = [f"{year}-{month:02d}" for month in range(1, 13)]
 
-    # Collect all unique items that appeared in top N of any month
-    all_top_items = set()
+        # Collect all unique items that appeared in top N of any month
+        all_top_items = set()
 
-    for month_str in all_months:
-        if item_type == "artists":
-            cursor.execute(
-                """
-                SELECT artist, COUNT(*) as plays
-                FROM musiclibrary
-                WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
-                GROUP BY artist
-                ORDER BY plays DESC
-                LIMIT ?
-            """,
-                (month_str, top_n),
-            )
-            month_tops = [row[0] for row in cursor.fetchall()]
-        elif item_type == "albums":
-            cursor.execute(
-                """
-                SELECT artist || ' - ' || album as full_album, COUNT(*) as plays
-                FROM musiclibrary
-                WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
-                    AND album != ''
-                GROUP BY artist, album
-                ORDER BY plays DESC
-                LIMIT ?
-            """,
-                (month_str, top_n),
-            )
-            month_tops = [row[0] for row in cursor.fetchall()]
-        else:  # songs
-            cursor.execute(
-                """
-                SELECT artist || ' - ' || track as full_track, COUNT(*) as plays
-                FROM musiclibrary
-                WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
-                GROUP BY artist, track
-                ORDER BY plays DESC
-                LIMIT ?
-            """,
-                (month_str, top_n),
-            )
-            month_tops = [row[0] for row in cursor.fetchall()]
+        for month_str in all_months:
+            if item_type == "artists":
+                cursor.execute(
+                    """
+                    SELECT artist, COUNT(*) as plays
+                    FROM musiclibrary
+                    WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
+                    GROUP BY artist
+                    ORDER BY plays DESC
+                    LIMIT ?
+                """,
+                    (month_str, top_n),
+                )
+                month_tops = [row[0] for row in cursor.fetchall()]
+            elif item_type == "albums":
+                cursor.execute(
+                    """
+                    SELECT artist || ' - ' || album as full_album, COUNT(*) as plays
+                    FROM musiclibrary
+                    WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
+                        AND album != ''
+                    GROUP BY artist, album
+                    ORDER BY plays DESC
+                    LIMIT ?
+                """,
+                    (month_str, top_n),
+                )
+                month_tops = [row[0] for row in cursor.fetchall()]
+            else:  # songs
+                cursor.execute(
+                    """
+                    SELECT artist || ' - ' || track as full_track, COUNT(*) as plays
+                    FROM musiclibrary
+                    WHERE strftime('%Y-%m', timestamp, 'unixepoch') = ?
+                    GROUP BY artist, track
+                    ORDER BY plays DESC
+                    LIMIT ?
+                """,
+                    (month_str, top_n),
+                )
+                month_tops = [row[0] for row in cursor.fetchall()]
 
-        all_top_items.update(month_tops)
+            all_top_items.update(month_tops)
 
-    if not all_top_items:
-        conn.close()
-        return {"dates": [], "items": [], "data": []}
+        if not all_top_items:
+            return {"dates": [], "items": [], "data": []}
 
-    # Get monthly counts for each top item throughout the year
-    evolution_data = {}
+        # Get monthly counts for each top item throughout the year
+        evolution_data = {}
 
-    for item in all_top_items:
-        if item_type == "artists":
-            cursor.execute(
-                """
-                SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
-                FROM musiclibrary
-                WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-                    AND artist = ?
-                GROUP BY month
-                ORDER BY month
-            """,
-                (str(year), item),
-            )
-        elif item_type == "albums":
-            # Split back the combined name (format: "Artist - Album")
-            parts = item.split(" - ", 1)
-            expected_parts = 2
-            if len(parts) == expected_parts:
-                artist, album = parts
+        for item in all_top_items:
+            if item_type == "artists":
                 cursor.execute(
                     """
                     SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
                     FROM musiclibrary
                     WHERE strftime('%Y', timestamp, 'unixepoch') = ?
                         AND artist = ?
-                        AND album = ?
                     GROUP BY month
                     ORDER BY month
                 """,
-                    (str(year), artist, album),
+                    (str(year), item),
                 )
-            else:
-                continue
-        else:  # songs
-            # Split back the combined name (format: "Artist - Track")
-            parts = item.split(" - ", 1)
-            expected_parts = 2
-            if len(parts) == expected_parts:
-                artist, track = parts
-                cursor.execute(
-                    """
-                    SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
-                    FROM musiclibrary
-                    WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-                        AND artist = ?
-                        AND track = ?
-                    GROUP BY month
-                    ORDER BY month
-                """,
-                    (str(year), artist, track),
-                )
-            else:
-                continue
+            elif item_type == "albums":
+                # Split back the combined name (format: "Artist - Album")
+                parts = item.split(" - ", 1)
+                expected_parts = 2
+                if len(parts) == expected_parts:
+                    artist, album = parts
+                    cursor.execute(
+                        """
+                        SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
+                        FROM musiclibrary
+                        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                            AND artist = ?
+                            AND album = ?
+                        GROUP BY month
+                        ORDER BY month
+                    """,
+                        (str(year), artist, album),
+                    )
+                else:
+                    continue
+            else:  # songs
+                # Split back the combined name (format: "Artist - Track")
+                parts = item.split(" - ", 1)
+                expected_parts = 2
+                if len(parts) == expected_parts:
+                    artist, track = parts
+                    cursor.execute(
+                        """
+                        SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
+                        FROM musiclibrary
+                        WHERE strftime('%Y', timestamp, 'unixepoch') = ?
+                            AND artist = ?
+                            AND track = ?
+                        GROUP BY month
+                        ORDER BY month
+                    """,
+                        (str(year), artist, track),
+                    )
+                else:
+                    continue
 
-        monthly_counts = {row[0]: row[1] for row in cursor.fetchall()}
-        evolution_data[item] = monthly_counts
-
-    conn.close()
+            monthly_counts = {row[0]: row[1] for row in cursor.fetchall()}
+            evolution_data[item] = monthly_counts
 
     # Generate all months in the year
     all_months = []
@@ -1351,10 +1320,6 @@ async def yearly_evolution(
         "items": list(all_top_items),
         "data": result_data,
     }
-
-
-# Removed admin panel and web-based updates
-# Database updates should be handled via cron jobs or background tasks
 
 
 def main():

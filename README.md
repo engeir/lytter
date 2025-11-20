@@ -19,6 +19,16 @@ GENIUS_TOKEN=your_genius_api_token  # optional, for lyrics
 
 ### Run with Docker
 
+**First time setup:**
+
+```bash
+# Create database file with correct permissions (important!)
+touch music.db
+sudo chown 1000:1000 music.db
+```
+
+Then run the container:
+
 ```bash
 # Pull and run latest
 docker pull ghcr.io/engeir/lytter:latest

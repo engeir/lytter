@@ -9,7 +9,7 @@ services:
     env_file: .env
     restart: unless-stopped
     volumes:
-      - ./music.db:/app/music.db
+      - lytter-data:/app
     healthcheck:
       test:
         [
@@ -24,3 +24,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+volumes:
+  lytter-data:

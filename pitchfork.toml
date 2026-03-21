@@ -1,0 +1,3 @@
+[daemons.website]
+auto = ["start", "stop"]
+run = "mise run run"

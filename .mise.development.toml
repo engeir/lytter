@@ -1,4 +1,5 @@
 [env]
+PITCHFORK_WEB_PORT = 19876
 '_'.python.venv = { path = ".venv", create = true }
 
 [tools]
@@ -7,4 +8,5 @@ fnox = "latest"
 hadolint = "latest"
 hk = "latest"
 pinact = "latest"
+pitchfork = "latest"
 pkl = "latest"

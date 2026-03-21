@@ -5,7 +5,7 @@
   <div class="card text-center">
     <div class="card-body">
       <h5 class="card-title">{{ title }}</h5>
-      <h3 class="text-primary">{{ "{:,}".format(value) }}</h3>
+      <h3 class="text-primary">{{ "{:,}".format(value) if value is number else value }}</h3>
     </div>
   </div>
 {% endmacro %}

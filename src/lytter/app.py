@@ -64,6 +64,8 @@ app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="stat
 # Constants
 CONSECUTIVE_SCROBBLES_THRESHOLD = 50
 MUSICBRAINZ_USER_AGENT = "lytter/1.0 (https://github.com/engeir/lytter)"
+MUSICBRAINZ_SEARCH_URL = "https://musicbrainz.org/ws/2/recording/"
+DURATION_RETRY_DAYS = 30
 
 
 def normalize_text(text: str) -> str:
@@ -163,33 +165,60 @@ def compute_listening_time(
     return format_listening_time(total_ms), known, len(tracks_plays)
 
 
+def _fetch_duration_from_mb(artist: str, track: str, mbid: str | None) -> int | None:
+    """Fetch duration from MusicBrainz, trying MBID lookup then name search.
+
+    Returns duration in milliseconds, or None if not found.
+    """
+    headers = {"User-Agent": MUSICBRAINZ_USER_AGENT}
+    if mbid:
+        resp = requests.get(
+            f"https://musicbrainz.org/ws/2/recording/{mbid}?fmt=json",
+            headers=headers,
+            timeout=10,
+        )
+        if resp.status_code == 200:  # noqa: PLR2004
+            length = resp.json().get("length")
+            if length:
+                return int(length)
+        _time.sleep(1.1)
+    # Fall back to name search (handles stale/invalid MBIDs from Last.fm)
+    resp = requests.get(
+        MUSICBRAINZ_SEARCH_URL,
+        params={
+            "query": f'recording:"{track}" AND artist:"{artist}"',
+            "fmt": "json",
+            "limit": "1",
+        },
+        headers=headers,
+        timeout=10,
+    )
+    if resp.status_code == 200:  # noqa: PLR2004
+        recordings = resp.json().get("recordings", [])
+        if recordings and recordings[0].get("length"):
+            return int(recordings[0]["length"])
+    return None
+
+
 def fetch_and_cache_durations(tracks: list[tuple[str, str, str | None]]) -> None:
     """Fetch real duration for (artist, track, mbid_or_None) pairs and cache them.
 
-    Uses MusicBrainz API when mbid is available; falls back to pylast otherwise.
-    Stores NULL for tracks where duration is genuinely unknown (avoids re-fetching).
+    Tries MusicBrainz MBID lookup, then MusicBrainz name search, then pylast.
+    Uses INSERT OR REPLACE so retries can overwrite stale NULL entries.
     """
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         for artist, track, mbid in tracks:
             duration_ms: int | None = None
             try:
-                if mbid:
-                    resp = requests.get(
-                        f"https://musicbrainz.org/ws/2/recording/{mbid}?fmt=json",
-                        headers={"User-Agent": MUSICBRAINZ_USER_AGENT},
-                        timeout=10,
-                    )
-                    if resp.status_code == 200:  # noqa: PLR2004
-                        length = resp.json().get("length")
-                        duration_ms = int(length) if length else None
-                else:
+                duration_ms = _fetch_duration_from_mb(artist, track, mbid)
+                if duration_ms is None:
                     raw = network.get_track(artist, track).get_duration()
                     duration_ms = int(raw) if raw else None
             except Exception:
                 pass
             cursor.execute(
-                "INSERT OR IGNORE INTO track_durations (artist, track, duration_ms, fetched_at) VALUES (?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO track_durations (artist, track, duration_ms, fetched_at) VALUES (?, ?, ?, ?)",
                 (artist, track, duration_ms, int(_time.time())),
             )
             conn.commit()
@@ -549,15 +578,26 @@ async def artist_stats(
             conn, tracks_plays
         )
 
-        # Find tracks not yet attempted (no row in track_durations at all)
+        # Find tracks not yet attempted, plus stale NULL entries to retry
+        stale_cutoff = int(_time.time()) - DURATION_RETRY_DAYS * 86_400
         cursor.execute(
             "SELECT track FROM track_durations WHERE artist = ?", (artist_name,)
         )
         cached_tracks = {row[0] for row in cursor.fetchall()}
+        cursor.execute(
+            "SELECT track FROM track_durations WHERE artist = ? AND duration_ms IS NULL AND fetched_at < ?",
+            (artist_name, stale_cutoff),
+        )
+        stale_tracks = {row[0] for row in cursor.fetchall()}
+        if stale_tracks:
+            cursor.execute(
+                f"DELETE FROM track_durations WHERE artist = ? AND track IN ({','.join('?' * len(stale_tracks))})",  # noqa: S608
+                (artist_name, *stale_tracks),
+            )
         missing = [
             (artist_name, row[0], row[2] or None)
             for row in track_rows
-            if row[0] not in cached_tracks
+            if row[0] not in cached_tracks or row[0] in stale_tracks
         ][:10]
 
     if missing:
@@ -886,14 +926,25 @@ async def album_stats(
             conn, tracks_plays
         )
 
+        stale_cutoff = int(_time.time()) - DURATION_RETRY_DAYS * 86_400
         cursor.execute(
             "SELECT track FROM track_durations WHERE artist = ?", (artist_name,)
         )
         cached_tracks = {row[0] for row in cursor.fetchall()}
+        cursor.execute(
+            "SELECT track FROM track_durations WHERE artist = ? AND duration_ms IS NULL AND fetched_at < ?",
+            (artist_name, stale_cutoff),
+        )
+        stale_tracks = {row[0] for row in cursor.fetchall()}
+        if stale_tracks:
+            cursor.execute(
+                f"DELETE FROM track_durations WHERE artist = ? AND track IN ({','.join('?' * len(stale_tracks))})",  # noqa: S608
+                (artist_name, *stale_tracks),
+            )
         missing = [
             (artist_name, row[0], row[2] or None)
             for row in track_rows
-            if row[0] not in cached_tracks
+            if row[0] not in cached_tracks or row[0] in stale_tracks
         ]
 
         # Get listening history
@@ -978,19 +1029,20 @@ async def song_stats(
 
         # Look up cached duration for this track
         cursor.execute(
-            "SELECT duration_ms FROM track_durations WHERE artist = ? AND track = ?",
+            "SELECT duration_ms, fetched_at FROM track_durations WHERE artist = ? AND track = ?",
             (artist_name, track_name),
         )
         duration_row = cursor.fetchone()
 
+        cursor.execute(
+            "SELECT MAX(track_mbid) FROM musiclibrary WHERE artist = ? AND track = ?",
+            (artist_name, track_name),
+        )
+        mbid_row = cursor.fetchone()
+        mbid = mbid_row[0] if mbid_row else None
+
         if duration_row is None:
             # Not yet fetched — schedule background fetch
-            cursor.execute(
-                "SELECT MAX(track_mbid) FROM musiclibrary WHERE artist = ? AND track = ?",
-                (artist_name, track_name),
-            )
-            mbid_row = cursor.fetchone()
-            mbid = mbid_row[0] if mbid_row else None
             background_tasks.add_task(
                 fetch_and_cache_durations, [(artist_name, track_name, mbid)]
             )
@@ -1000,9 +1052,17 @@ async def song_stats(
             listening_time = format_listening_time(duration_row[0] * total_plays)
             duration_fetched = True
         else:
-            # Fetched but duration genuinely unknown
+            # Previously fetched but unknown — retry if stale
             listening_time = None
             duration_fetched = True
+            if _time.time() - duration_row[1] > DURATION_RETRY_DAYS * 86_400:
+                cursor.execute(
+                    "DELETE FROM track_durations WHERE artist = ? AND track = ?",
+                    (artist_name, track_name),
+                )
+                background_tasks.add_task(
+                    fetch_and_cache_durations, [(artist_name, track_name, mbid)]
+                )
 
         # Get listening history
         cursor.execute(

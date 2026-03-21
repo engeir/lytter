@@ -4,6 +4,7 @@ import datetime
 import json
 import os
 import sqlite3
+import time as _time
 import unicodedata
 from collections import Counter, OrderedDict
 from pathlib import Path
@@ -18,7 +19,7 @@ from rapidfuzz import fuzz, process
 try:
     import pandas as pd
     import plotly.express as px
-    from fastapi import FastAPI, Request
+    from fastapi import BackgroundTasks, FastAPI, Request
     from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
     from fastapi.templating import Jinja2Templates
@@ -62,6 +63,7 @@ app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="stat
 
 # Constants
 CONSECUTIVE_SCROBBLES_THRESHOLD = 50
+MUSICBRAINZ_USER_AGENT = "lytter/1.0 (https://github.com/engeir/lytter)"
 
 
 def normalize_text(text: str) -> str:
@@ -109,9 +111,89 @@ def init_db():
                 timestamp INTEGER UNIQUE NOT NULL
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS track_durations (
+                artist TEXT NOT NULL,
+                track TEXT NOT NULL,
+                duration_ms INTEGER,
+                fetched_at INTEGER NOT NULL,
+                PRIMARY KEY (artist, track)
+            )
+        """)
 
 
 init_db()
+
+
+def format_listening_time(total_ms: float) -> str:
+    """Format milliseconds into human-readable time string."""
+    total_min = total_ms / 60_000
+    if total_min < 60:  # noqa: PLR2004
+        return f"{int(total_min)} min"
+    hours = int(total_min // 60)
+    mins = int(total_min % 60)
+    if hours >= 48:  # noqa: PLR2004
+        return f"{hours}h"
+    return f"{hours}h {mins}m"
+
+
+def compute_listening_time(
+    conn: sqlite3.Connection,
+    tracks_plays: list[tuple[str, str, int]],
+) -> tuple[str | None, int, int]:
+    """Compute total listening time for (artist, track, play_count) tuples.
+
+    Returns (formatted_time_or_None, known_count, total_unique_count).
+    Returns None as time if no cached durations exist yet.
+    """
+    cursor = conn.cursor()
+    total_ms = 0.0
+    known = 0
+    for artist, track, plays in tracks_plays:
+        cursor.execute(
+            "SELECT duration_ms FROM track_durations WHERE artist = ? AND track = ?",
+            (artist, track),
+        )
+        row = cursor.fetchone()
+        if row and row[0]:
+            total_ms += row[0] * plays
+            known += 1
+    if known == 0:
+        return None, 0, len(tracks_plays)
+    return format_listening_time(total_ms), known, len(tracks_plays)
+
+
+def fetch_and_cache_durations(tracks: list[tuple[str, str, str | None]]) -> None:
+    """Fetch real duration for (artist, track, mbid_or_None) pairs and cache them.
+
+    Uses MusicBrainz API when mbid is available; falls back to pylast otherwise.
+    Stores NULL for tracks where duration is genuinely unknown (avoids re-fetching).
+    """
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        for artist, track, mbid in tracks:
+            duration_ms: int | None = None
+            try:
+                if mbid:
+                    resp = requests.get(
+                        f"https://musicbrainz.org/ws/2/recording/{mbid}?fmt=json",
+                        headers={"User-Agent": MUSICBRAINZ_USER_AGENT},
+                        timeout=10,
+                    )
+                    if resp.status_code == 200:  # noqa: PLR2004
+                        length = resp.json().get("length")
+                        duration_ms = int(length) if length else None
+                else:
+                    raw = network.get_track(artist, track).get_duration()
+                    duration_ms = int(raw) if raw else None
+            except Exception:
+                pass
+            cursor.execute(
+                "INSERT OR IGNORE INTO track_durations (artist, track, duration_ms, fetched_at) VALUES (?, ?, ?, ?)",
+                (artist, track, duration_ms, int(_time.time())),
+            )
+            conn.commit()
+            _time.sleep(1.1)  # MusicBrainz rate limit: 1 req/sec
 
 
 class GetScrobbles:
@@ -373,6 +455,19 @@ async def index(request: Request):
         )
         unique_albums = cursor.fetchone()[0]
 
+        # Compute total listening time using cached durations
+        cursor.execute("""
+            SELECT m.artist, m.track, COUNT(*) as plays, td.duration_ms
+            FROM musiclibrary m
+            LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            GROUP BY m.artist, m.track
+        """)
+        rows = cursor.fetchall()
+        total_ms = sum(row[2] * row[3] for row in rows if row[3])
+        known_track_count = sum(1 for row in rows if row[3])
+        total_track_count = len(rows)
+        total_listening_time = format_listening_time(total_ms) if known_track_count > 0 else None
+
     # Get current playing track
     current_track = None
     try:
@@ -398,19 +493,24 @@ async def index(request: Request):
             "unique_tracks": unique_tracks,
             "unique_albums": unique_albums,
             "current_track": current_track,
+            "total_listening_time": total_listening_time,
+            "listening_time_known_tracks": known_track_count,
+            "listening_time_total_tracks": total_track_count,
         },
     )
 
 
 @app.get("/artist/{artist_name}", response_class=HTMLResponse)
-async def artist_stats(request: Request, artist_name: str):
+async def artist_stats(
+    request: Request, artist_name: str, background_tasks: BackgroundTasks
+):
     """Artist statistics page."""
     stats = CurrentStats()
 
     # Get listening history (already returns plain dict)
     history_json = json.dumps(stats.listening_history_db(artist_name))
 
-    # Get basic artist stats
+    # Get basic artist stats and duration data
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
 
@@ -431,6 +531,38 @@ async def artist_stats(request: Request, artist_name: str):
         )
         unique_albums = cursor.fetchone()[0]
 
+        # Get per-track play counts and durations
+        cursor.execute(
+            """
+            SELECT m.track, COUNT(*) as plays, MAX(m.track_mbid) as mbid, td.duration_ms
+            FROM musiclibrary m
+            LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE m.artist = ?
+            GROUP BY m.track
+            """,
+            (artist_name,),
+        )
+        track_rows = cursor.fetchall()
+
+        tracks_plays = [(artist_name, row[0], row[1]) for row in track_rows]
+        listening_time, known_tracks, total_unique_tracks = compute_listening_time(
+            conn, tracks_plays
+        )
+
+        # Find tracks not yet attempted (no row in track_durations at all)
+        cursor.execute(
+            "SELECT track FROM track_durations WHERE artist = ?", (artist_name,)
+        )
+        cached_tracks = {row[0] for row in cursor.fetchall()}
+        missing = [
+            (artist_name, row[0], row[2] or None)
+            for row in track_rows
+            if row[0] not in cached_tracks
+        ][:10]
+
+    if missing:
+        background_tasks.add_task(fetch_and_cache_durations, missing)
+
     return templates.TemplateResponse(
         "artist.html",
         {
@@ -440,6 +572,9 @@ async def artist_stats(request: Request, artist_name: str):
             "unique_tracks": unique_tracks,
             "unique_albums": unique_albums,
             "history_chart": history_json,
+            "listening_time": listening_time,
+            "known_tracks": known_tracks,
+            "total_unique_tracks": total_unique_tracks,
         },
     )
 
@@ -710,7 +845,12 @@ async def artist_top_albums(artist: str):
 
 
 @app.get("/album/{artist_name}/{album_name:path}", response_class=HTMLResponse)
-async def album_stats(request: Request, artist_name: str, album_name: str):
+async def album_stats(
+    request: Request,
+    artist_name: str,
+    album_name: str,
+    background_tasks: BackgroundTasks,
+):
     """Album statistics page."""
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
@@ -727,6 +867,34 @@ async def album_stats(request: Request, artist_name: str, album_name: str):
             (artist_name, album_name),
         )
         unique_tracks = cursor.fetchone()[0]
+
+        # Get per-track play counts and durations for this album
+        cursor.execute(
+            """
+            SELECT m.track, COUNT(*) as plays, MAX(m.track_mbid) as mbid, td.duration_ms
+            FROM musiclibrary m
+            LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE m.artist = ? AND m.album = ?
+            GROUP BY m.track
+            """,
+            (artist_name, album_name),
+        )
+        track_rows = cursor.fetchall()
+
+        tracks_plays = [(artist_name, row[0], row[1]) for row in track_rows]
+        listening_time, known_tracks, total_unique_tracks = compute_listening_time(
+            conn, tracks_plays
+        )
+
+        cursor.execute(
+            "SELECT track FROM track_durations WHERE artist = ?", (artist_name,)
+        )
+        cached_tracks = {row[0] for row in cursor.fetchall()}
+        missing = [
+            (artist_name, row[0], row[2] or None)
+            for row in track_rows
+            if row[0] not in cached_tracks
+        ]
 
         # Get listening history
         cursor.execute(
@@ -762,6 +930,9 @@ async def album_stats(request: Request, artist_name: str, album_name: str):
     fig_dict["data"][0]["y"] = counts
     history_json = json.dumps(fig_dict)
 
+    if missing:
+        background_tasks.add_task(fetch_and_cache_durations, missing)
+
     return templates.TemplateResponse(
         "album.html",
         {
@@ -771,12 +942,20 @@ async def album_stats(request: Request, artist_name: str, album_name: str):
             "total_plays": total_plays,
             "unique_tracks": unique_tracks,
             "history_chart": history_json,
+            "listening_time": listening_time,
+            "known_tracks": known_tracks,
+            "total_unique_tracks": total_unique_tracks,
         },
     )
 
 
 @app.get("/song/{artist_name}/{track_name:path}", response_class=HTMLResponse)
-async def song_stats(request: Request, artist_name: str, track_name: str):
+async def song_stats(
+    request: Request,
+    artist_name: str,
+    track_name: str,
+    background_tasks: BackgroundTasks,
+):
     """Song statistics page."""
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
@@ -796,6 +975,34 @@ async def song_stats(request: Request, artist_name: str, track_name: str):
             (artist_name, track_name),
         )
         unique_albums = cursor.fetchone()[0]
+
+        # Look up cached duration for this track
+        cursor.execute(
+            "SELECT duration_ms FROM track_durations WHERE artist = ? AND track = ?",
+            (artist_name, track_name),
+        )
+        duration_row = cursor.fetchone()
+
+        if duration_row is None:
+            # Not yet fetched — schedule background fetch
+            cursor.execute(
+                "SELECT MAX(track_mbid) FROM musiclibrary WHERE artist = ? AND track = ?",
+                (artist_name, track_name),
+            )
+            mbid_row = cursor.fetchone()
+            mbid = mbid_row[0] if mbid_row else None
+            background_tasks.add_task(
+                fetch_and_cache_durations, [(artist_name, track_name, mbid)]
+            )
+            listening_time = None
+            duration_fetched = False
+        elif duration_row[0]:
+            listening_time = format_listening_time(duration_row[0] * total_plays)
+            duration_fetched = True
+        else:
+            # Fetched but duration genuinely unknown
+            listening_time = None
+            duration_fetched = True
 
         # Get listening history
         cursor.execute(
@@ -840,6 +1047,8 @@ async def song_stats(request: Request, artist_name: str, track_name: str):
             "total_plays": total_plays,
             "unique_albums": unique_albums,
             "history_chart": history_json,
+            "listening_time": listening_time,
+            "duration_fetched": duration_fetched,
         },
     )
 

@@ -4,43 +4,52 @@
 {% block title %}{{ track_name }} - {{ artist_name }} - Last.fm Stats{% endblock %}
 
 {% block content %}
-<nav aria-label="breadcrumb">
+  <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/">Home</a></li>
-        <li class="breadcrumb-item"><a href="/artist/{{ artist_name|urlencode }}">{{ artist_name }}</a></li>
-        <li class="breadcrumb-item active" aria-current="page">{{ track_name }}</li>
+      <li class="breadcrumb-item">
+        <a href="/">Home</a>
+      </li>
+      <li class="breadcrumb-item">
+        <a href="/artist/{{ artist_name|urlencode }}">{{ artist_name }}</a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">{{ track_name }}</li>
     </ol>
-</nav>
+  </nav>
 
-<h1 class="mb-2">{{ track_name }}</h1>
-<h5 class="text-muted mb-4">by {{ artist_name }}</h5>
+  <h1 class="mb-2">{{ track_name }}</h1>
+  <h5 class="text-muted mb-4">by {{ artist_name }}</h5>
 
-<div class="row mb-4">
-    <div class="col-md-6">
-        {{ stat_card("Total Plays", total_plays) }}
+  <div class="row mb-4">
+    <div class="col-md-4">{{ stat_card("Total Plays", total_plays) }}</div>
+    <div class="col-md-4">{{ stat_card("Appears in Albums", unique_albums) }}</div>
+    <div class="col-md-4">
+      {% if listening_time %}
+        {{ stat_card("Time Spent", listening_time) }}
+      {% elif not duration_fetched %}
+        {{ stat_card('Time Spent', 'Loading…') }}
+      {% else %}
+        {{ stat_card('Time Spent', 'Unknown') }}
+      {% endif %}
     </div>
-    <div class="col-md-6">
-        {{ stat_card("Appears in Albums", unique_albums) }}
-    </div>
-</div>
+  </div>
 
-<div class="row mb-4">
+  <div class="row mb-4">
     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Listening History</h5>
-                <div id="history-chart" style="min-height: 400px;"></div>
-            </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Listening History</h5>
+          <div id="history-chart" style="min-height: 400px;"></div>
         </div>
+      </div>
     </div>
-</div>
+  </div>
 {% endblock %}
 
 {% block scripts %}
-<script>
+  <script>
     const historyData = {{ history_chart|safe }};
 
     // Plot listening history
     Plotly.newPlot('history-chart', historyData.data, historyData.layout);
-</script>
+  </script>
 {% endblock %}

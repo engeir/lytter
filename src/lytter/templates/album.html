@@ -4,51 +4,61 @@
 {% block title %}{{ album_name }} - {{ artist_name }} - Last.fm Stats{% endblock %}
 
 {% block content %}
-<nav aria-label="breadcrumb">
+  <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/">Home</a></li>
-        <li class="breadcrumb-item"><a href="/artist/{{ artist_name|urlencode }}">{{ artist_name }}</a></li>
-        <li class="breadcrumb-item active" aria-current="page">{{ album_name }}</li>
+      <li class="breadcrumb-item">
+        <a href="/">Home</a>
+      </li>
+      <li class="breadcrumb-item">
+        <a href="/artist/{{ artist_name|urlencode }}">{{ artist_name }}</a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">{{ album_name }}</li>
     </ol>
-</nav>
+  </nav>
 
-<h1 class="mb-2">{{ album_name }}</h1>
-<h5 class="text-muted mb-4">by {{ artist_name }}</h5>
+  <h1 class="mb-2">{{ album_name }}</h1>
+  <h5 class="text-muted mb-4">by {{ artist_name }}</h5>
 
-<div class="row mb-4">
-    <div class="col-md-6">
-        {{ stat_card("Total Plays", total_plays) }}
+  <div class="row mb-4">
+    <div class="col-md-4">{{ stat_card("Total Plays", total_plays) }}</div>
+    <div class="col-md-4">{{ stat_card("Unique Tracks", unique_tracks) }}</div>
+    <div class="col-md-4">
+      {% if listening_time %}
+        {{ stat_card("Time Spent", listening_time) }}
+        {% if known_tracks < total_unique_tracks %}
+          <small class="text-muted d-block text-center mt-1">{{ known_tracks }}/{{ total_unique_tracks }} tracks</small>
+        {% endif %}
+      {% else %}
+        {{ stat_card('Time Spent', 'Loading…') }}
+      {% endif %}
     </div>
-    <div class="col-md-6">
-        {{ stat_card("Unique Tracks", unique_tracks) }}
-    </div>
-</div>
+  </div>
 
-<div class="row mb-4">
+  <div class="row mb-4">
     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Listening History</h5>
-                <div id="history-chart" style="min-height: 400px;"></div>
-            </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Listening History</h5>
+          <div id="history-chart" style="min-height: 400px;"></div>
         </div>
+      </div>
     </div>
-</div>
+  </div>
 
-<div class="row">
+  <div class="row">
     <div class="col-12 mb-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Album Tracks</h5>
-                <div id="tracks-list"></div>
-            </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Album Tracks</h5>
+          <div id="tracks-list"></div>
         </div>
+      </div>
     </div>
-</div>
+  </div>
 {% endblock %}
 
 {% block scripts %}
-<script>
+  <script>
     const historyData = {{ history_chart|safe }};
     const artistName = {{ artist_name|tojson }};
     const albumName = {{ album_name|tojson }};
@@ -76,5 +86,5 @@
         .catch(error => {
             document.getElementById('tracks-list').innerHTML = '<p class="text-muted">Error loading tracks</p>';
         });
-</script>
+  </script>
 {% endblock %}

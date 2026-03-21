@@ -4,60 +4,66 @@
 {% block title %}{{ artist_name }} - Last.fm Stats{% endblock %}
 
 {% block content %}
-<nav aria-label="breadcrumb">
+  <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/">Home</a></li>
-        <li class="breadcrumb-item active" aria-current="page">{{ artist_name }}</li>
+      <li class="breadcrumb-item">
+        <a href="/">Home</a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">{{ artist_name }}</li>
     </ol>
-</nav>
+  </nav>
 
-<h1 class="mb-4">{{ artist_name }}</h1>
+  <h1 class="mb-4">{{ artist_name }}</h1>
 
-<div class="row mb-4">
-    <div class="col-md-4">
-        {{ stat_card("Total Plays", total_plays) }}
+  <div class="row mb-4">
+    <div class="col-md-3">{{ stat_card("Total Plays", total_plays) }}</div>
+    <div class="col-md-3">{{ stat_card("Unique Tracks", unique_tracks) }}</div>
+    <div class="col-md-3">{{ stat_card("Unique Albums", unique_albums) }}</div>
+    <div class="col-md-3">
+      {% if listening_time %}
+        {{ stat_card("Time Spent", listening_time) }}
+        {% if known_tracks < total_unique_tracks %}
+          <small class="text-muted d-block text-center mt-1">{{ known_tracks }}/{{ total_unique_tracks }} tracks</small>
+        {% endif %}
+      {% else %}
+        {{ stat_card('Time Spent', 'Loading…') }}
+      {% endif %}
     </div>
-    <div class="col-md-4">
-        {{ stat_card("Unique Tracks", unique_tracks) }}
-    </div>
-    <div class="col-md-4">
-        {{ stat_card("Unique Albums", unique_albums) }}
-    </div>
-</div>
+  </div>
 
-<div class="row mb-4">
+  <div class="row mb-4">
     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Listening History</h5>
-                <div id="history-chart" style="min-height: 400px;"></div>
-            </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Listening History</h5>
+          <div id="history-chart" style="min-height: 400px;"></div>
         </div>
+      </div>
     </div>
-</div>
+  </div>
 
-<div class="row">
+  <div class="row">
     <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Top Songs</h5>
-                <div id="top-songs-list"></div>
-            </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Top Songs</h5>
+          <div id="top-songs-list"></div>
         </div>
+      </div>
     </div>
     <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Top Albums</h5>
-                <div id="top-albums-list"></div>
-            </div>
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Top Albums</h5>
+          <div id="top-albums-list"></div>
         </div>
+      </div>
     </div>
-</div>
+  </div>
 {% endblock %}
 
 {% block scripts %}
-<script>
+  <script>
     const historyData = {{ history_chart|safe }};
     const artistName = {{ artist_name|tojson }};
 
@@ -105,5 +111,5 @@
         .catch(error => {
             document.getElementById('top-albums-list').innerHTML = '<p class="text-muted">Error loading albums</p>';
         });
-</script>
+  </script>
 {% endblock %}

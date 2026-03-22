@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Duration Stats - Last.fm Stats{% endblock %}
+
+{% block content %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-4">⏱️ Duration Statistics</h1>
+    </div>
+  </div>
+
+  <!-- Top by Time Spent Row -->
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">🎵 Top 20 Songs by Time</h5>
+          <div style="max-height: 600px;
+                      overflow-y: auto"
+               hx-get="/html/duration/top-songs?limit=20"
+               hx-trigger="load"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">💿 Top 20 Albums by Time</h5>
+          <div style="max-height: 600px;
+                      overflow-y: auto"
+               hx-get="/html/duration/top-albums?limit=20"
+               hx-trigger="load"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">🎤 Top 20 Artists by Time</h5>
+          <div style="max-height: 600px;
+                      overflow-y: auto"
+               hx-get="/html/duration/top-artists?limit=20"
+               hx-trigger="load"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Song Lengths Row -->
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">📏 Longest Songs</h5>
+          <p class="text-muted" style="font-size: 0.8rem">≥ 10 plays</p>
+          <div style="max-height: 600px;
+                      overflow-y: auto"
+               hx-get="/html/duration/longest-songs?limit=20"
+               hx-trigger="load"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">⚡ Shortest Songs</h5>
+          <p class="text-muted" style="font-size: 0.8rem">≥ 10 plays</p>
+          <div style="max-height: 600px;
+                      overflow-y: auto"
+               hx-get="/html/duration/shortest-songs?limit=20"
+               hx-trigger="load"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

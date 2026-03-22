@@ -1,0 +1,14 @@
+{# HTML Fragment for Song Length Lists - Loaded via HTMX #}
+{% from 'macros.html' import yearly_top_item %}
+{% if items %}
+
+  {% for item in items %}
+    {{ yearly_top_item(index=loop.index, primary_text=item.track,
+        secondary_text=item.artist, plays=item.duration,
+        primary_url='/song/' + (item.artist|urlencode) + '/' + (item.track|urlencode),
+    secondary_url='/artist/' + (item.artist|urlencode)) }}
+  {% endfor %}
+
+{% else %}
+  <p class="text-muted text-center">No data available</p>
+{% endif %}

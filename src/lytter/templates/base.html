@@ -1,44 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Last.fm Stats{% endblock %}</title>
-    
+    <title>
+      {% block title %}Last.fm Stats{% endblock %}
+    </title>
+
     <!-- External Libraries -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
+
     <!-- Custom Styles -->
     <link href="/static/styles.css" rel="stylesheet">
-</head>
-<body>
+  </head>
+  <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">🎵 Last.fm Stats</a>
-            <div class="navbar-nav">
-                <a class="nav-link" href="/yearly">Yearly Stats</a>
-            </div>
-            <div class="ms-auto">
-                <div class="position-relative" style="width: 300px;">
-                    <input
-                        type="search"
-                        id="artist-search"
-                        class="form-control"
-                        placeholder="Search artists..."
-                        autocomplete="off"
-                    >
-                    <div id="search-results" class="position-absolute w-100 mt-1" style="z-index: 1050; display: none; max-height: 400px; overflow-y: auto;">
-                        <!-- Results populated by JavaScript -->
-                    </div>
-                </div>
-            </div>
+      <div class="container">
+        <a class="navbar-brand" href="/">🎵 Last.fm Stats</a>
+        <div class="navbar-nav">
+          <a class="nav-link" href="/yearly">Yearly Stats</a>
+          <a class="nav-link" href="/duration-stats">Duration Stats</a>
         </div>
+        <div class="ms-auto">
+          <div class="position-relative" style="width: 300px;">
+            <input type="search" id="artist-search" class="form-control" placeholder="Search artists..." autocomplete="off">
+            <div id="search-results"
+                 class="position-absolute w-100 mt-1"
+                 style="z-index: 1050;
+                        display: none;
+                        max-height: 400px;
+                        overflow-y: auto">
+              <!-- Results populated by JavaScript -->
+            </div>
+          </div>
+        </div>
+      </div>
     </nav>
 
     <div class="container mt-4">
-        {% block content %}{% endblock %}
+      {% block content %}{% endblock %}
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -70,8 +72,7 @@
                             searchResults.innerHTML = '<div class="search-no-results">No artists found</div>';
                         } else {
                             searchResults.innerHTML = data.results.map(artist => `
-                                <a href="/artist/${encodeURIComponent(artist.artist)}"
-                                   class="search-result-item">
+                                <a href="/artist/${encodeURIComponent(artist.artist)}" class="search-result-item">
                                     <span style="font-weight: 500;">${escapeHtml(artist.artist)}</span>
                                     <div>
                                         <span class="badge bg-primary" style="margin-right: 0.5rem;">${artist.plays.toLocaleString()}</span>
@@ -115,5 +116,5 @@
     </script>
 
     {% block scripts %}{% endblock %}
-</body>
+  </body>
 </html>

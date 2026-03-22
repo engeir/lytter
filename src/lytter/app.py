@@ -1544,6 +1544,173 @@ async def yearly_top_items_html(
     )
 
 
+@app.get("/duration-stats", response_class=HTMLResponse)
+async def duration_stats_page(request: Request):
+    """Duration-based statistics page."""
+    return templates.TemplateResponse("duration_stats.html", {"request": request})
+
+
+@app.get("/html/duration/top-songs", response_class=HTMLResponse)
+async def duration_top_songs(request: Request, limit: int = 20):
+    """Top songs by total time spent listening."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT m.artist, m.track, COUNT(*) as plays, SUM(td.duration_ms) as total_ms
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE td.duration_ms IS NOT NULL
+            GROUP BY m.artist, m.track
+            ORDER BY total_ms DESC
+            LIMIT ?
+        """,
+            (limit,),
+        )
+        items = [
+            {
+                "artist": row[0],
+                "track": row[1],
+                "plays": row[2],
+                "time": format_listening_time(row[3]),
+            }
+            for row in cursor.fetchall()
+        ]
+    return templates.TemplateResponse(
+        "_duration_top_items.html",
+        {"request": request, "items": items, "item_type": "songs"},
+    )
+
+
+@app.get("/html/duration/top-albums", response_class=HTMLResponse)
+async def duration_top_albums(request: Request, limit: int = 20):
+    """Top albums by total time spent listening."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT m.artist, m.album, COUNT(*) as plays, SUM(td.duration_ms) as total_ms
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE td.duration_ms IS NOT NULL AND m.album != ''
+            GROUP BY m.artist, m.album
+            ORDER BY total_ms DESC
+            LIMIT ?
+        """,
+            (limit,),
+        )
+        items = [
+            {
+                "artist": row[0],
+                "album": row[1],
+                "plays": row[2],
+                "time": format_listening_time(row[3]),
+            }
+            for row in cursor.fetchall()
+        ]
+    return templates.TemplateResponse(
+        "_duration_top_items.html",
+        {"request": request, "items": items, "item_type": "albums"},
+    )
+
+
+@app.get("/html/duration/top-artists", response_class=HTMLResponse)
+async def duration_top_artists(request: Request, limit: int = 20):
+    """Top artists by total time spent listening."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT m.artist, COUNT(*) as plays, SUM(td.duration_ms) as total_ms
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE td.duration_ms IS NOT NULL
+            GROUP BY m.artist
+            ORDER BY total_ms DESC
+            LIMIT ?
+        """,
+            (limit,),
+        )
+        items = [
+            {
+                "artist": row[0],
+                "plays": row[1],
+                "time": format_listening_time(row[2]),
+            }
+            for row in cursor.fetchall()
+        ]
+    return templates.TemplateResponse(
+        "_duration_top_items.html",
+        {"request": request, "items": items, "item_type": "artists"},
+    )
+
+
+@app.get("/html/duration/longest-songs", response_class=HTMLResponse)
+async def duration_longest_songs(request: Request, limit: int = 20, min_plays: int = 10):
+    """Longest songs (by track duration) with at least min_plays plays."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT td.artist, td.track, td.duration_ms, COUNT(*) as plays
+            FROM track_durations td
+            JOIN musiclibrary m ON m.artist = td.artist AND m.track = td.track
+            WHERE td.duration_ms IS NOT NULL
+            GROUP BY td.artist, td.track
+            HAVING plays >= ?
+            ORDER BY td.duration_ms DESC
+            LIMIT ?
+        """,
+            (min_plays, limit),
+        )
+        items = [
+            {
+                "artist": row[0],
+                "track": row[1],
+                "duration": format_track_duration(row[2]),
+                "plays": row[3],
+            }
+            for row in cursor.fetchall()
+        ]
+    return templates.TemplateResponse(
+        "_duration_song_lengths.html",
+        {"request": request, "items": items, "direction": "longest"},
+    )
+
+
+@app.get("/html/duration/shortest-songs", response_class=HTMLResponse)
+async def duration_shortest_songs(request: Request, limit: int = 20, min_plays: int = 10):
+    """Shortest songs (by track duration) with at least min_plays plays."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT td.artist, td.track, td.duration_ms, COUNT(*) as plays
+            FROM track_durations td
+            JOIN musiclibrary m ON m.artist = td.artist AND m.track = td.track
+            WHERE td.duration_ms IS NOT NULL
+            GROUP BY td.artist, td.track
+            HAVING plays >= ?
+            ORDER BY td.duration_ms ASC
+            LIMIT ?
+        """,
+            (min_plays, limit),
+        )
+        items = [
+            {
+                "artist": row[0],
+                "track": row[1],
+                "duration": format_track_duration(row[2]),
+                "plays": row[3],
+            }
+            for row in cursor.fetchall()
+        ]
+    return templates.TemplateResponse(
+        "_duration_song_lengths.html",
+        {"request": request, "items": items, "direction": "shortest"},
+    )
+
+
 @app.get("/api/yearly/time-patterns")
 async def yearly_time_patterns(year: int):
     """Get listening patterns by hour and day of week for a specific year."""

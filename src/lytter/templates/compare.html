@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block title %}Compare Artists - Last.fm Stats{% endblock %}
+
+{% block content %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-4">🔀 Compare Artists</h1>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <label class="form-label">Search and add up to 5 artists</label>
+          <div class="position-relative" style="max-width: 400px">
+            <input type="search" id="compare-search" class="form-control" placeholder="Search artists..." autocomplete="off">
+            <div id="compare-search-results"
+                 class="position-absolute w-100 mt-1"
+                 style="z-index: 1050;
+                        display: none;
+                        max-height: 300px;
+                        overflow-y: auto"></div>
+          </div>
+          <!-- Selected artist chips -->
+          <div id="selected-artists" class="mt-3 d-flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison Table -->
+  <div class="row mb-4" id="compare-table-row" style="display: none !important">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Stats Comparison</h5>
+          <div style="overflow-x: auto">
+            <table class="table table-dark table-bordered mb-0" id="compare-table">
+              <thead id="compare-thead">
+              </thead>
+              <tbody id="compare-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History Chart -->
+  <div class="row mb-4" id="compare-chart-row" style="display: none !important">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Listening History</h5>
+          <div id="compare-history-chart" style="height: 450px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const COLORS = ['#58a6ff', '#ff6b6b', '#4ecdc4', '#ffd93d', '#ff9ff3'];
+    const MAX_ARTISTS = 5;
+
+    let selectedArtists = [];
+
+    // --- URL state ---
+    function readUrlArtists() {
+      const params = new URLSearchParams(window.location.search);
+      return params.getAll('artists');
+    }
+
+    function writeUrlArtists() {
+      const params = new URLSearchParams();
+      selectedArtists.forEach(a => params.append('artists', a));
+      const newUrl = selectedArtists.length
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname;
+      history.replaceState(null, '', newUrl);
+    }
+
+    // --- Search ---
+    (function () {
+      const input = document.getElementById('compare-search');
+      const results = document.getElementById('compare-search-results');
+      let timeout;
+
+      input.addEventListener('input', e => {
+        clearTimeout(timeout);
+        const q = e.target.value.trim();
+        if (q.length < 2) { results.style.display = 'none'; return; }
+        timeout = setTimeout(() => {
+          fetch(`/api/search/artists?q=${encodeURIComponent(q)}&limit=8`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.results.length === 0) {
+                results.innerHTML = '<div class="search-no-results">No artists found</div>';
+              } else {
+                results.innerHTML = data.results.map(a => {
+                  const alreadyAdded = selectedArtists.includes(a.artist);
+                  const full = selectedArtists.length >= MAX_ARTISTS;
+                  const disabled = alreadyAdded || full;
+                  return `<div class="search-result-item ${disabled ? 'opacity-50' : 'compare-result-clickable'}" data-artist="${escapeAttr(a.artist)}" style="${disabled ? '' : 'cursor:pointer'}">
+                    <span style="font-weight:500">${escapeHtml(a.artist)}</span>
+                    <span class="badge bg-primary ms-2">${a.plays.toLocaleString()}</span>
+                    ${alreadyAdded ? '<span class="badge bg-secondary ms-1">Added</span>' : ''}
+                  </div>`;
+                }).join('');
+                results.querySelectorAll('.compare-result-clickable').forEach(el => {
+                  el.addEventListener('click', () => {
+                    addArtist(el.dataset.artist);
+                    input.value = '';
+                    results.style.display = 'none';
+                  });
+                });
+              }
+              results.style.display = 'block';
+            })
+            .catch(() => { results.style.display = 'none'; });
+        }, 300);
+      });
+
+      document.addEventListener('click', e => {
+        if (!input.contains(e.target) && !results.contains(e.target)) {
+          results.style.display = 'none';
+        }
+      });
+
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { input.value = ''; results.style.display = 'none'; }
+      });
+    })();
+
+    // --- Artist management ---
+    function addArtist(artist) {
+      if (selectedArtists.includes(artist) || selectedArtists.length >= MAX_ARTISTS) return;
+      selectedArtists.push(artist);
+      writeUrlArtists();
+      renderChips();
+      loadComparison();
+    }
+
+    function removeArtist(artist) {
+      selectedArtists = selectedArtists.filter(a => a !== artist);
+      writeUrlArtists();
+      renderChips();
+      if (selectedArtists.length === 0) {
+        document.getElementById('compare-table-row').style.display = 'none';
+        document.getElementById('compare-chart-row').style.display = 'none';
+      } else {
+        loadComparison();
+      }
+    }
+
+    function renderChips() {
+      const container = document.getElementById('selected-artists');
+      container.innerHTML = selectedArtists.map((a, i) =>
+        `<span class="badge d-inline-flex align-items-center gap-1 py-2 px-3" style="background-color: ${COLORS[i]}20; color: ${COLORS[i]}; border: 1px solid ${COLORS[i]}; font-size: 0.9rem">
+          ${escapeHtml(a)}
+          <button type="button" class="btn-close btn-close-white" style="font-size: 0.6rem; filter: none; opacity:0.8" aria-label="Remove" onclick="removeArtist(${JSON.stringify(a)})"></button>
+        </span>`
+      ).join('');
+    }
+
+    // --- Comparison data ---
+    function buildQuery(artists) {
+      return artists.map(a => `artists=${encodeURIComponent(a)}`).join('&');
+    }
+
+    function loadComparison() {
+      const q = buildQuery(selectedArtists);
+      Promise.all([
+        fetch(`/api/compare/artists?${q}`).then(r => r.json()),
+        fetch(`/api/compare/artist-history?${q}`).then(r => r.json())
+      ]).then(([statsData, histData]) => {
+        renderTable(statsData.artists);
+        renderChart(histData);
+      }).catch(err => console.error('Compare error:', err));
+    }
+
+    function renderTable(artistsData) {
+      const tableRow = document.getElementById('compare-table-row');
+      const thead = document.getElementById('compare-thead');
+      const tbody = document.getElementById('compare-tbody');
+
+      const orderedArtists = selectedArtists.filter(a => a in artistsData);
+
+      // Header
+      thead.innerHTML = `<tr>
+        <th style="color: var(--text-secondary); min-width: 150px">Metric</th>
+        ${orderedArtists.map((a, i) =>
+          `<th style="color: ${COLORS[i]}; min-width: 130px">
+            <a href="/artist/${encodeURIComponent(a)}" class="text-decoration-none" style="color: inherit">${escapeHtml(a)}</a>
+          </th>`
+        ).join('')}
+      </tr>`;
+
+      // Rows: each metric with optional "best" highlight
+      const metrics = [
+        { label: 'Total plays',      key: 'plays',            fmt: v => v.toLocaleString(),  higher: true  },
+        { label: 'Unique tracks',    key: 'unique_tracks',    fmt: v => v.toLocaleString(),  higher: true  },
+        { label: 'Unique albums',    key: 'unique_albums',    fmt: v => v.toLocaleString(),  higher: true  },
+        { label: 'Listening time',   key: 'listening_time',   fmt: v => v,                   higher: false },
+        { label: 'Avg track length', key: 'avg_track_length', fmt: v => v,                   higher: false },
+        { label: 'Top track',        key: 'top_track',        fmt: v => v,                   higher: false },
+        { label: 'First scrobble',   key: 'first_seen',       fmt: v => v,                   higher: false },
+        { label: 'Last scrobble',    key: 'last_seen',        fmt: v => v,                   higher: false },
+      ];
+
+      tbody.innerHTML = metrics.map(m => {
+        const vals = orderedArtists.map(a => artistsData[a]?.[m.key]);
+        // Find best numeric value for highlighting
+        let bestIdx = -1;
+        if (m.higher && orderedArtists.length > 1) {
+          const nums = vals.map(v => typeof v === 'number' ? v : -Infinity);
+          const max = Math.max(...nums);
+          bestIdx = nums.indexOf(max);
+        }
+        const cells = orderedArtists.map((a, i) => {
+          const val = vals[i];
+          const display = val !== undefined && val !== null ? m.fmt(val) : '—';
+          const highlight = i === bestIdx ? `style="color: #3fb950; font-weight: 600"` : '';
+          // For top_track, link to song page
+          if (m.key === 'top_track' && artistsData[a]?.top_track) {
+            const url = `/song/${encodeURIComponent(a)}/${encodeURIComponent(artistsData[a].top_track)}`;
+            return `<td ${highlight}><a href="${url}" class="text-decoration-none" style="${i === bestIdx ? 'color:#3fb950' : 'color:inherit'}">${escapeHtml(display)}</a> <small style="color:var(--text-secondary)">(${artistsData[a].top_track_plays})</small></td>`;
+          }
+          return `<td ${highlight}>${escapeHtml(String(display))}</td>`;
+        }).join('');
+        return `<tr><td style="color: var(--text-secondary); font-size: 0.85rem">${m.label}</td>${cells}</tr>`;
+      }).join('');
+
+      tableRow.style.display = '';
+    }
+
+    function renderChart(histData) {
+      const chartRow = document.getElementById('compare-chart-row');
+      if (!histData.months || histData.months.length === 0) {
+        chartRow.style.display = 'none';
+        return;
+      }
+
+      const traces = selectedArtists
+        .filter(a => a in histData.data)
+        .map((a, i) => ({
+          x: histData.months,
+          y: histData.data[a],
+          name: a,
+          type: 'scatter',
+          mode: 'lines',
+          line: { color: COLORS[i], width: 2 }
+        }));
+
+      const maxDate = histData.months[histData.months.length - 1];
+      const maxYear = parseInt(maxDate.slice(0, 4));
+      const rangeStart = `${maxYear - 5}-${maxDate.slice(5)}`;
+
+      const layout = {
+        paper_bgcolor: '#161b22',
+        plot_bgcolor: '#161b22',
+        font: { color: '#f0f6fc', size: 12 },
+        xaxis: {
+          gridcolor: '#30363d',
+          color: '#f0f6fc',
+          type: 'date',
+          range: [rangeStart, maxDate],
+          rangeslider: { visible: true, bgcolor: '#0d1117', bordercolor: '#30363d', borderwidth: 1 },
+          rangeselector: {
+            buttons: [
+              { count: 1, label: '1y', step: 'year', stepmode: 'backward' },
+              { count: 2, label: '2y', step: 'year', stepmode: 'backward' },
+              { count: 5, label: '5y', step: 'year', stepmode: 'backward' },
+              { step: 'all', label: 'All' }
+            ],
+            bgcolor: '#161b22', activecolor: '#238636',
+            bordercolor: '#30363d', borderwidth: 1,
+            font: { color: '#f0f6fc' }
+          }
+        },
+        yaxis: { gridcolor: '#30363d', color: '#f0f6fc', title: 'Plays per month' },
+        legend: {
+          orientation: 'h', x: 0, y: 1.12,
+          bgcolor: 'rgba(22,27,34,0.8)', bordercolor: '#30363d', borderwidth: 1
+        },
+        margin: { l: 60, r: 40, t: 60, b: 80 },
+        hovermode: 'x unified'
+      };
+
+      Plotly.newPlot('compare-history-chart', traces, layout, { responsive: true, displayModeBar: false });
+      chartRow.style.display = '';
+    }
+
+    // --- Helpers ---
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function escapeAttr(text) {
+      return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // --- Init: load from URL ---
+    const initial = readUrlArtists();
+    if (initial.length > 0) {
+      selectedArtists = initial.slice(0, MAX_ARTISTS);
+      renderChips();
+      loadComparison();
+    }
+  </script>
+{% endblock %}

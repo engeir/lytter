@@ -20,7 +20,7 @@ from rapidfuzz import fuzz, process
 try:
     import pandas as pd
     import plotly.express as px
-    from fastapi import BackgroundTasks, FastAPI, Request
+    from fastapi import BackgroundTasks, FastAPI, Query, Request
     from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
     from fastapi.templating import Jinja2Templates
@@ -1548,6 +1548,148 @@ async def yearly_top_items_html(
 async def duration_stats_page(request: Request):
     """Duration-based statistics page."""
     return templates.TemplateResponse("duration_stats.html", {"request": request})
+
+
+@app.get("/compare", response_class=HTMLResponse)
+async def compare_page(request: Request):
+    """Artist comparison page."""
+    return templates.TemplateResponse("compare.html", {"request": request})
+
+
+@app.get("/api/compare/artists")
+async def compare_artists(artists: list[str] = Query(default=[])):  # noqa: B008
+    """Return comparison stats for up to 5 artists."""
+    artists = artists[:5]
+    if not artists:
+        return {"artists": {}}
+
+    placeholders = ",".join("?" * len(artists))
+
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+
+        # Basic stats
+        cursor.execute(
+            f"""
+            SELECT artist, COUNT(*) as plays,
+                   COUNT(DISTINCT track) as unique_tracks,
+                   COUNT(DISTINCT album) as unique_albums,
+                   MIN(timestamp) as first_seen,
+                   MAX(timestamp) as last_seen
+            FROM musiclibrary
+            WHERE artist IN ({placeholders})
+            GROUP BY artist
+        """,
+            artists,
+        )
+        basic = {
+            row[0]: {
+                "plays": row[1],
+                "unique_tracks": row[2],
+                "unique_albums": row[3],
+                "first_seen": row[4],
+                "last_seen": row[5],
+            }
+            for row in cursor.fetchall()
+        }
+
+        # Listening time
+        cursor.execute(
+            f"""
+            SELECT m.artist, SUM(td.duration_ms) as total_ms
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE m.artist IN ({placeholders}) AND td.duration_ms IS NOT NULL
+            GROUP BY m.artist
+        """,
+            artists,
+        )
+        listening_times = {row[0]: row[1] for row in cursor.fetchall()}
+
+        # Avg track length
+        cursor.execute(
+            f"""
+            SELECT m.artist, AVG(td.duration_ms) as avg_ms
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE m.artist IN ({placeholders}) AND td.duration_ms IS NOT NULL
+            GROUP BY m.artist
+        """,
+            artists,
+        )
+        avg_lengths = {row[0]: row[1] for row in cursor.fetchall()}
+
+        # Top track per artist
+        cursor.execute(
+            f"""
+            SELECT artist, track, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE artist IN ({placeholders})
+            GROUP BY artist, track
+            ORDER BY plays DESC
+        """,
+            artists,
+        )
+        top_tracks: dict[str, tuple[str, int]] = {}
+        for row in cursor.fetchall():
+            if row[0] not in top_tracks:
+                top_tracks[row[0]] = (row[1], row[2])
+
+    result = {}
+    for artist in artists:
+        if artist not in basic:
+            continue
+        b = basic[artist]
+        total_ms = listening_times.get(artist)
+        avg_ms = avg_lengths.get(artist)
+        first_dt = datetime.datetime.fromtimestamp(b["first_seen"], tz=datetime.UTC)
+        last_dt = datetime.datetime.fromtimestamp(b["last_seen"], tz=datetime.UTC)
+        top_track, top_track_plays = top_tracks.get(artist, ("—", 0))
+        result[artist] = {
+            "plays": b["plays"],
+            "unique_tracks": b["unique_tracks"],
+            "unique_albums": b["unique_albums"],
+            "listening_time": format_listening_time(total_ms) if total_ms else "—",
+            "avg_track_length": format_track_duration(int(avg_ms)) if avg_ms else "—",
+            "first_seen": first_dt.strftime("%Y-%m-%d"),
+            "last_seen": last_dt.strftime("%Y-%m-%d"),
+            "top_track": top_track,
+            "top_track_plays": top_track_plays,
+        }
+    return {"artists": result}
+
+
+@app.get("/api/compare/artist-history")
+async def compare_artist_history(artists: list[str] = Query(default=[])):  # noqa: B008
+    """Return monthly play counts per artist for the comparison chart."""
+    artists = artists[:5]
+    if not artists:
+        return {"months": [], "data": {}}
+
+    placeholders = ",".join("?" * len(artists))
+
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT artist, strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE artist IN ({placeholders})
+            GROUP BY artist, month
+            ORDER BY month
+        """,
+            artists,
+        )
+        rows = cursor.fetchall()
+
+    # Build unified month list and per-artist series
+    all_months: list[str] = sorted({row[1] for row in rows})
+    raw: dict[str, dict[str, int]] = {a: {} for a in artists}
+    for artist, month, plays in rows:
+        raw[artist][month] = plays
+
+    data = {artist: [raw[artist].get(m, 0) for m in all_months] for artist in artists}
+    return {"months": all_months, "data": data}
 
 
 @app.get("/html/duration/top-songs", response_class=HTMLResponse)

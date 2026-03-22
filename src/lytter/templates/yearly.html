@@ -43,6 +43,26 @@
     </div>
   </div>
 
+  <!-- Duration Time Patterns Row -->
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">⏱️ Listening Time by Hour</h5>
+          <div id="hourly-duration-chart" style="height: 400px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">⏱️ Listening Time by Day of Week</h5>
+          <div id="weekly-duration-chart" style="height: 400px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Top Items Row -->
   <div class="row mb-4">
     <div class="col-md-4">
@@ -182,6 +202,7 @@
 
           // Load charts
           loadTimePatterns();
+          loadDurationPatterns();
           loadEvolution();
       });
 
@@ -533,8 +554,65 @@
           });
       }
 
+      function loadDurationPatterns() {
+          fetch(`/api/yearly/time-patterns-duration?year=${currentYear}`)
+              .then(response => response.json())
+              .then(data => {
+                  renderHourlyDurationChart(data.hourly);
+                  renderWeeklyDurationChart(data.weekly, data.day_names);
+              })
+              .catch(error => console.error('Error loading duration time patterns:', error));
+      }
+
+      function renderHourlyDurationChart(hourlyData) {
+          const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`);
+          const trace = {
+              type: 'barpolar',
+              r: hourlyData,
+              theta: hours,
+              marker: {
+                  color: hourlyData,
+                  colorscale: 'Greens',
+                  line: { color: '#3fb950', width: 1 }
+              },
+              hovertemplate: '<b>%{theta}</b><br>%{r:.1f} min<extra></extra>'
+          };
+          const layout = {
+              polar: {
+                  radialaxis: { gridcolor: '#30363d', color: '#f0f6fc' },
+                  angularaxis: { gridcolor: '#30363d', color: '#f0f6fc', direction: 'clockwise' },
+                  bgcolor: '#161b22'
+              },
+              paper_bgcolor: '#161b22',
+              font: { color: '#f0f6fc' },
+              showlegend: false,
+              margin: { l: 80, r: 80, t: 20, b: 80 }
+          };
+          Plotly.newPlot('hourly-duration-chart', [trace], layout, { responsive: true });
+      }
+
+      function renderWeeklyDurationChart(weeklyData, dayNames) {
+          const trace = {
+              type: 'bar',
+              x: dayNames,
+              y: weeklyData,
+              marker: { color: '#3fb950', line: { color: '#2ea043', width: 1 } },
+              hovertemplate: '<b>%{x}</b><br>%{y:.1f} min<extra></extra>'
+          };
+          const layout = {
+              paper_bgcolor: '#161b22',
+              plot_bgcolor: '#161b22',
+              font: { color: '#f0f6fc' },
+              xaxis: { gridcolor: '#30363d', color: '#f0f6fc' },
+              yaxis: { gridcolor: '#30363d', color: '#f0f6fc', title: 'Minutes' },
+              margin: { l: 60, r: 40, t: 20, b: 80 }
+          };
+          Plotly.newPlot('weekly-duration-chart', [trace], layout, { responsive: true });
+      }
+
       // Load initial chart data (top lists loaded via HTMX)
       loadTimePatterns();
+      loadDurationPatterns();
       loadEvolution();
 
       // Resize charts when tabs are switched to ensure proper width

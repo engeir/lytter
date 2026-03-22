@@ -102,4 +102,171 @@
       </div>
     </div>
   </div>
+
+  <!-- Average Song Length Over Time -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">📈 Average Song Length Over Time</h5>
+          <div id="avg-duration-chart" style="height: 450px">
+            <div class="d-flex justify-content-center align-items-center h-100">
+              <p class="text-muted">Loading chart...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duration Histogram + Artists by Avg Length -->
+  <div class="row mb-4">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">📊 Song Length Distribution</h5>
+          <div id="duration-histogram" style="height: 400px">
+            <div class="d-flex justify-content-center align-items-center h-100">
+              <p class="text-muted">Loading chart...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">🎸 Artists by Avg Track Length</h5>
+          <p class="text-muted" style="font-size: 0.8rem">≥ 50 plays</p>
+          <div style="max-height: 400px;
+                      overflow-y: auto"
+               hx-get="/html/duration/artists-by-length?limit=20"
+               hx-trigger="load"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const plotlyLayout = {
+      paper_bgcolor: '#161b22',
+      plot_bgcolor: '#161b22',
+      font: { color: '#f0f6fc', size: 12 },
+      xaxis: { gridcolor: '#30363d', color: '#f0f6fc' },
+      yaxis: { gridcolor: '#30363d', color: '#f0f6fc' },
+      margin: { l: 60, r: 40, t: 20, b: 60 }
+    };
+
+    // Average song length over time
+    fetch('/api/duration/avg-over-time')
+      .then(r => r.json())
+      .then(data => {
+        // Format seconds as M:SS for hover, use raw seconds for y-axis
+        const hoverText = data.avg_seconds.map(s => {
+          const m = Math.floor(s / 60);
+          const sec = s % 60;
+          return `${m}:${String(sec).padStart(2, '0')}`;
+        });
+        const trace = {
+          x: data.months,
+          y: data.avg_seconds,
+          type: 'scatter',
+          mode: 'lines',
+          line: { color: '#58a6ff', width: 2 },
+          hovertemplate: '%{x}<br>Avg: %{customdata}<extra></extra>',
+          customdata: hoverText
+        };
+        // Default to last 5 years
+        const maxDate = data.months[data.months.length - 1];
+        const maxYear = parseInt(maxDate.slice(0, 4));
+        const rangeStart = `${maxYear - 5}-${maxDate.slice(5)}`;
+        const layout = {
+          ...plotlyLayout,
+          margin: { ...plotlyLayout.margin, b: 80 },
+          yaxis: {
+            ...plotlyLayout.yaxis,
+            title: 'Seconds',
+            tickvals: [120, 180, 240, 300, 360, 420, 480],
+            ticktext: ['2:00', '3:00', '4:00', '5:00', '6:00', '7:00', '8:00']
+          },
+          xaxis: {
+            ...plotlyLayout.xaxis,
+            type: 'date',
+            range: [rangeStart, maxDate],
+            rangeslider: { visible: true, bgcolor: '#0d1117', bordercolor: '#30363d', borderwidth: 1 },
+            rangeselector: {
+              buttons: [
+                { count: 1, label: '1y', step: 'year', stepmode: 'backward' },
+                { count: 2, label: '2y', step: 'year', stepmode: 'backward' },
+                { count: 5, label: '5y', step: 'year', stepmode: 'backward' },
+                { step: 'all', label: 'All' }
+              ],
+              bgcolor: '#161b22',
+              activecolor: '#238636',
+              bordercolor: '#30363d',
+              borderwidth: 1,
+              font: { color: '#f0f6fc' }
+            }
+          }
+        };
+        Plotly.newPlot('avg-duration-chart', [trace], layout, { responsive: true, displayModeBar: false });
+      })
+      .catch(() => {
+        document.getElementById('avg-duration-chart').innerHTML = '<p class="text-muted text-center">Error loading chart</p>';
+      });
+
+    // Duration histogram
+    fetch('/api/duration/histogram')
+      .then(r => r.json())
+      .then(data => {
+        // Render tracePlays first (left axis), traceSongs second (right axis)
+        // barmode:'overlay' + manual offset/width gives proper side-by-side bars across dual axes
+        const tracePlays = {
+          x: data.buckets,
+          y: data.total_plays,
+          name: 'Total plays',
+          type: 'bar',
+          marker: { color: '#3fb950' },
+          offset: -0.425,
+          width: 0.4
+        };
+        const traceSongs = {
+          x: data.buckets,
+          y: data.unique_songs,
+          name: 'Unique songs',
+          type: 'bar',
+          marker: { color: '#58a6ff' },
+          yaxis: 'y2',
+          offset: 0.025,
+          width: 0.4
+        };
+        const layout = {
+          ...plotlyLayout,
+          barmode: 'overlay',
+          xaxis: { ...plotlyLayout.xaxis, title: 'Track duration' },
+          yaxis: { ...plotlyLayout.yaxis, title: 'Total plays' },
+          yaxis2: { ...plotlyLayout.yaxis, title: 'Unique songs', overlaying: 'y', side: 'right', showgrid: false },
+          legend: { x: 0.55, y: 1, bgcolor: 'rgba(22,27,34,0.8)', bordercolor: '#30363d', borderwidth: 1 }
+        };
+        Plotly.newPlot('duration-histogram', [tracePlays, traceSongs], layout, { responsive: true, displayModeBar: false });
+      })
+      .catch(() => {
+        document.getElementById('duration-histogram').innerHTML = '<p class="text-muted text-center">Error loading chart</p>';
+      });
+
+    // Re-fit histogram after HTMX swaps content (adjacent column reflow can collapse the chart)
+    document.body.addEventListener('htmx:afterSwap', () => {
+      if (typeof Plotly !== 'undefined' && document.getElementById('duration-histogram')) {
+        Plotly.Plots.resize('duration-histogram');
+      }
+    });
+  </script>
 {% endblock %}

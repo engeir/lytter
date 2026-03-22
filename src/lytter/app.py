@@ -1711,6 +1711,153 @@ async def duration_shortest_songs(request: Request, limit: int = 20, min_plays: 
     )
 
 
+@app.get("/api/duration/avg-over-time")
+async def duration_avg_over_time():
+    """Average song length per month over all time."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month,
+                   AVG(td.duration_ms) as avg_ms,
+                   COUNT(*) as plays
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE td.duration_ms IS NOT NULL
+            GROUP BY month
+            ORDER BY month
+        """
+        )
+        rows = cursor.fetchall()
+    months = [row[0] for row in rows]
+    avg_seconds = [round(row[1] / 1000) for row in rows]
+    return {"months": months, "avg_seconds": avg_seconds}
+
+
+@app.get("/api/duration/histogram")
+async def duration_histogram():
+    """Distribution of song durations (bucketed by minute) across played library."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT (duration_ms / 60000) as minute_bucket,
+                   COUNT(*) as unique_songs,
+                   SUM(plays) as total_plays
+            FROM (
+                SELECT m.artist, m.track, td.duration_ms, COUNT(*) as plays
+                FROM musiclibrary m
+                JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+                WHERE td.duration_ms IS NOT NULL
+                GROUP BY m.artist, m.track
+            ) AS sub
+            GROUP BY minute_bucket
+            ORDER BY minute_bucket
+        """
+        )
+        rows = cursor.fetchall()
+
+    # Cap at 15 min, lump remainder into "15m+" bucket
+    cap = 15
+    bucketed: dict[int, tuple[int, int]] = {}
+    overflow_songs = 0
+    overflow_plays = 0
+    for bucket, songs, plays in rows:
+        if bucket >= cap:
+            overflow_songs += songs
+            overflow_plays += plays
+        else:
+            bucketed[bucket] = (songs, plays)
+
+    labels = [f"{i}-{i+1}m" for i in range(cap)]
+    unique_songs = [bucketed.get(i, (0, 0))[0] for i in range(cap)]
+    total_plays = [bucketed.get(i, (0, 0))[1] for i in range(cap)]
+    if overflow_songs:
+        labels.append(f"{cap}m+")
+        unique_songs.append(overflow_songs)
+        total_plays.append(overflow_plays)
+
+    return {"buckets": labels, "unique_songs": unique_songs, "total_plays": total_plays}
+
+
+@app.get("/html/duration/artists-by-length", response_class=HTMLResponse)
+async def duration_artists_by_length(
+    request: Request, limit: int = 20, min_plays: int = 50
+):
+    """Artists ranked by average track length, with at least min_plays total plays."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT m.artist, AVG(td.duration_ms) as avg_ms, COUNT(DISTINCT m.track) as unique_tracks
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE td.duration_ms IS NOT NULL
+            GROUP BY m.artist
+            HAVING COUNT(*) >= ?
+            ORDER BY avg_ms DESC
+            LIMIT ?
+        """,
+            (min_plays, limit),
+        )
+        items = [
+            {
+                "artist": row[0],
+                "avg_duration": format_track_duration(int(row[1])),
+                "unique_tracks": row[2],
+            }
+            for row in cursor.fetchall()
+        ]
+    return templates.TemplateResponse(
+        "_duration_artists_length.html",
+        {"request": request, "items": items},
+    )
+
+
+@app.get("/api/yearly/time-patterns-duration")
+async def yearly_time_patterns_duration(year: int):
+    """Get listening time in minutes by hour and day of week for a specific year."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT strftime('%H', timestamp, 'unixepoch') as hour,
+                   SUM(td.duration_ms) as total_ms
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE td.duration_ms IS NOT NULL
+              AND strftime('%Y', timestamp, 'unixepoch') = ?
+            GROUP BY hour
+            ORDER BY hour
+        """,
+            (str(year),),
+        )
+        hourly_raw = {int(row[0]): row[1] / 60_000 for row in cursor.fetchall()}
+        hourly_data = [round(hourly_raw.get(h, 0), 1) for h in range(24)]
+
+        cursor.execute(
+            """
+            SELECT strftime('%w', timestamp, 'unixepoch') as dow,
+                   SUM(td.duration_ms) as total_ms
+            FROM musiclibrary m
+            JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            WHERE td.duration_ms IS NOT NULL
+              AND strftime('%Y', timestamp, 'unixepoch') = ?
+            GROUP BY dow
+            ORDER BY dow
+        """,
+            (str(year),),
+        )
+        weekly_raw = {int(row[0]): row[1] / 60_000 for row in cursor.fetchall()}
+        # strftime('%w'): 0=Sunday … 6=Saturday; reorder to Mon–Sun
+        day_order = [1, 2, 3, 4, 5, 6, 0]
+        day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        weekly_data = [round(weekly_raw.get(d, 0), 1) for d in day_order]
+
+    return {"hourly": hourly_data, "weekly": weekly_data, "day_names": day_names}
+
+
 @app.get("/api/yearly/time-patterns")
 async def yearly_time_patterns(year: int):
     """Get listening patterns by hour and day of week for a specific year."""

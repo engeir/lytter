@@ -137,6 +137,12 @@ def init_db():
 init_db()
 
 
+def format_track_duration(ms: int) -> str:
+    """Format milliseconds as M:SS track duration (e.g. 302000 → '5:02')."""
+    total_sec = ms // 1000
+    return f"{total_sec // 60}:{total_sec % 60:02d}"
+
+
 def format_listening_time(total_ms: float) -> str:
     """Format milliseconds into human-readable time string."""
     total_min = total_ms / 60_000
@@ -1217,6 +1223,7 @@ async def song_stats(
 
         # Find similar recordings (variants of the same performance)
         current_duration_ms = duration_row[0] if duration_row and duration_row[0] else None
+        track_duration = format_track_duration(current_duration_ms) if current_duration_ms else None
         similar_tracks = find_similar_tracks(conn, artist_name, track_name, current_duration_ms)
         combined_plays = total_plays + sum(t["plays"] for t in similar_tracks)
         combined_time = (
@@ -1270,6 +1277,7 @@ async def song_stats(
             "history_chart": history_json,
             "listening_time": listening_time,
             "duration_fetched": duration_fetched,
+            "track_duration": track_duration,
             "similar_tracks": similar_tracks,
             "combined_plays": combined_plays,
             "combined_time": combined_time,

@@ -20,9 +20,18 @@
   <h5 class="text-muted mb-4">by {{ artist_name }}</h5>
 
   <div class="row mb-4">
-    <div class="col-md-4">{{ stat_card("Total Plays", total_plays) }}</div>
-    <div class="col-md-4">{{ stat_card("Appears in Albums", unique_albums) }}</div>
-    <div class="col-md-4">
+    <div class="col-md-3">{{ stat_card("Total Plays", total_plays) }}</div>
+    <div class="col-md-3">{{ stat_card("Appears in Albums", unique_albums) }}</div>
+    <div class="col-md-3">
+      {% if track_duration %}
+        {{ stat_card("Duration", track_duration) }}
+      {% elif not duration_fetched %}
+        {{ stat_card('Duration', 'Loading…') }}
+      {% else %}
+        {{ stat_card('Duration', 'Unknown') }}
+      {% endif %}
+    </div>
+    <div class="col-md-3">
       {% if listening_time %}
         {{ stat_card("Time Spent", listening_time) }}
       {% elif not duration_fetched %}

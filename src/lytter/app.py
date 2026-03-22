@@ -3,6 +3,7 @@
 import datetime
 import json
 import os
+import re
 import sqlite3
 import time as _time
 import unicodedata
@@ -65,7 +66,15 @@ app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="stat
 CONSECUTIVE_SCROBBLES_THRESHOLD = 50
 MUSICBRAINZ_USER_AGENT = "lytter/1.0 (https://github.com/engeir/lytter)"
 MUSICBRAINZ_SEARCH_URL = "https://musicbrainz.org/ws/2/recording/"
+DEEZER_SEARCH_URL = "https://api.deezer.com/search"
 DURATION_RETRY_DAYS = 30
+
+_VARIANT_RE = re.compile(
+    r"\s*[-–(]\s*"
+    r"(remaster(ed)?|demo|radio\s+edit|acoustic|extended|"
+    r"instrumental|remix|single|edit|version|bonus\s+track)\b.*$",
+    re.IGNORECASE,
+)
 
 
 def normalize_text(text: str) -> str:
@@ -165,12 +174,73 @@ def compute_listening_time(
     return format_listening_time(total_ms), known, len(tracks_plays)
 
 
-def _fetch_duration_from_mb(artist: str, track: str, mbid: str | None) -> int | None:
-    """Fetch duration from MusicBrainz, trying MBID lookup then name search.
+def _clean_track_title(title: str) -> str | None:
+    """Strip non-live variant suffixes from a track title.
 
-    Returns duration in milliseconds, or None if not found.
+    Removes "- Remastered", "- Demo", "- Radio Edit" etc. so a MusicBrainz
+    name search can match the canonical recording. Live tracks are intentionally
+    left unchanged — stripping "- Live at..." would return the wrong duration.
+    """
+    cleaned = _VARIANT_RE.sub("", title).strip()
+    return cleaned if cleaned != title else None
+
+
+def _mb_name_search(artist: str, track: str) -> int | None:
+    """Search MusicBrainz by artist + track name.
+
+    Returns ms or None.
+    """
+    resp = requests.get(
+        MUSICBRAINZ_SEARCH_URL,
+        params={
+            "query": f'recording:"{track}" AND artist:"{artist}"',
+            "fmt": "json",
+            "limit": "1",
+        },
+        headers={"User-Agent": MUSICBRAINZ_USER_AGENT},
+        timeout=10,
+    )
+    if resp.status_code == 200:  # noqa: PLR2004
+        recordings = resp.json().get("recordings", [])
+        if recordings and recordings[0].get("length"):
+            return int(recordings[0]["length"])
+    return None
+
+
+def _deezer_search(artist: str, track: str) -> int | None:
+    """Search Deezer by artist + track name.
+
+    Returns ms or None.
+
+    Deezer's search handles title format variations (e.g. "Title - Live at X"
+    matches "Title (Live at X)") and covers independent streaming releases well.
+    No authentication required.
+    """
+    resp = requests.get(
+        DEEZER_SEARCH_URL,
+        params={"q": f'track:"{track}" artist:"{artist}"', "limit": "1"},
+        headers={"User-Agent": MUSICBRAINZ_USER_AGENT},
+        timeout=10,
+    )
+    if resp.status_code == 200:  # noqa: PLR2004
+        items = resp.json().get("data", [])
+        if items and items[0].get("duration"):
+            return items[0]["duration"] * 1000  # Deezer returns seconds
+    return None
+
+
+def _fetch_duration_from_mb(artist: str, track: str, mbid: str | None) -> int | None:
+    """Fetch track duration using multiple sources in order of preference.
+
+    1. MusicBrainz MBID lookup (exact, fast)
+    2. Deezer search (handles variant title formats, broad streaming coverage)
+    3. MusicBrainz name search, full title
+    4. MusicBrainz name search, cleaned title (strips "- Remastered" etc.)
+
+    Returns duration in milliseconds, or None if not found anywhere.
     """
     headers = {"User-Agent": MUSICBRAINZ_USER_AGENT}
+    # 1. MusicBrainz MBID lookup
     if mbid:
         resp = requests.get(
             f"https://musicbrainz.org/ws/2/recording/{mbid}?fmt=json",
@@ -182,21 +252,22 @@ def _fetch_duration_from_mb(artist: str, track: str, mbid: str | None) -> int | 
             if length:
                 return int(length)
         _time.sleep(1.1)
-    # Fall back to name search (handles stale/invalid MBIDs from Last.fm)
-    resp = requests.get(
-        MUSICBRAINZ_SEARCH_URL,
-        params={
-            "query": f'recording:"{track}" AND artist:"{artist}"',
-            "fmt": "json",
-            "limit": "1",
-        },
-        headers=headers,
-        timeout=10,
-    )
-    if resp.status_code == 200:  # noqa: PLR2004
-        recordings = resp.json().get("recordings", [])
-        if recordings and recordings[0].get("length"):
-            return int(recordings[0]["length"])
+    # 2. Deezer
+    result = _deezer_search(artist, track)
+    if result:
+        return result
+    _time.sleep(1.1)
+    # 3. MusicBrainz name search, full title
+    result = _mb_name_search(artist, track)
+    if result:
+        return result
+    _time.sleep(1.1)
+    # 4. MusicBrainz name search, cleaned title (non-live suffixes stripped)
+    cleaned = _clean_track_title(track)
+    if cleaned:
+        result = _mb_name_search(artist, cleaned)
+        if result:
+            return result
     return None
 
 

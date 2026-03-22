@@ -75,6 +75,7 @@ _VARIANT_RE = re.compile(
     r"instrumental|remix|single|edit|version|bonus\s+track)\b.*$",
     re.IGNORECASE,
 )
+_DATE_DOT_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b")
 
 
 def normalize_text(text: str) -> str:
@@ -185,6 +186,81 @@ def _clean_track_title(title: str) -> str | None:
     return cleaned if cleaned != title else None
 
 
+def _normalize_title(title: str) -> str:
+    """Normalize date separators for consistent API searches.
+
+    Converts dot-separated dates (24.03.23) to slash-separated (24/03/23)
+    so Deezer and MusicBrainz can match titles regardless of date format.
+    """
+    return _DATE_DOT_RE.sub(r"\1/\2/\3", title)
+
+
+def _fuzzy_cache_lookup(
+    conn: sqlite3.Connection, artist: str, track: str
+) -> int | None:
+    """Check track_durations for a cached entry with a very similar title.
+
+    Returns the cached duration_ms if a title with ≥95% similarity is found,
+    allowing date-format variants and minor punctuation differences to reuse
+    an already-fetched duration without hitting any external API.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT track, duration_ms FROM track_durations WHERE artist = ? AND duration_ms IS NOT NULL",
+        (artist,),
+    )
+    for cached_track, cached_ms in cursor.fetchall():
+        if fuzz.ratio(track, cached_track) >= 95:  # noqa: PLR2004
+            return cached_ms
+    return None
+
+
+def find_similar_tracks(
+    conn: sqlite3.Connection,
+    artist: str,
+    track: str,
+    current_duration_ms: int | None,
+) -> list[dict]:
+    """Find other tracks by the same artist that look like the same recording.
+
+    Criteria (either condition):
+    - Title similarity ≥ 95%, OR
+    - Title similarity ≥ 50% AND durations within 5 seconds of each other
+
+    Returns list of dicts with keys: track, plays, duration_ms, similarity.
+    Excludes the current track itself. Sorted by play count descending.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT m.track, COUNT(*) as plays, td.duration_ms
+        FROM musiclibrary m
+        LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+        WHERE m.artist = ?
+        GROUP BY m.track
+        """,
+        (artist,),
+    )
+    similar = []
+    for other_track, plays, other_ms in cursor.fetchall():
+        if other_track == track:
+            continue
+        score = fuzz.ratio(track, other_track)
+        duration_match = (
+            current_duration_ms is not None
+            and other_ms is not None
+            and abs(current_duration_ms - other_ms) <= 5_000  # noqa: PLR2004
+        )
+        if score >= 95 or (score >= 50 and duration_match):  # noqa: PLR2004
+            similar.append({
+                "track": other_track,
+                "plays": plays,
+                "duration_ms": other_ms,
+                "similarity": round(score),
+            })
+    return sorted(similar, key=lambda x: x["plays"], reverse=True)
+
+
 def _mb_name_search(artist: str, track: str) -> int | None:
     """Search MusicBrainz by artist + track name.
 
@@ -252,18 +328,19 @@ def _fetch_duration_from_mb(artist: str, track: str, mbid: str | None) -> int | 
             if length:
                 return int(length)
         _time.sleep(1.1)
+    search_title = _normalize_title(track)
     # 2. Deezer
-    result = _deezer_search(artist, track)
+    result = _deezer_search(artist, search_title)
     if result:
         return result
     _time.sleep(1.1)
-    # 3. MusicBrainz name search, full title
-    result = _mb_name_search(artist, track)
+    # 3. MusicBrainz name search, full title (date-normalized)
+    result = _mb_name_search(artist, search_title)
     if result:
         return result
     _time.sleep(1.1)
     # 4. MusicBrainz name search, cleaned title (non-live suffixes stripped)
-    cleaned = _clean_track_title(track)
+    cleaned = _clean_track_title(search_title)
     if cleaned:
         result = _mb_name_search(artist, cleaned)
         if result:
@@ -282,7 +359,10 @@ def fetch_and_cache_durations(tracks: list[tuple[str, str, str | None]]) -> None
         for artist, track, mbid in tracks:
             duration_ms: int | None = None
             try:
-                duration_ms = _fetch_duration_from_mb(artist, track, mbid)
+                # Check cache first for a near-identical title (e.g. date format variants)
+                duration_ms = _fuzzy_cache_lookup(conn, artist, track)
+                if duration_ms is None:
+                    duration_ms = _fetch_duration_from_mb(artist, track, mbid)
                 if duration_ms is None:
                     raw = network.get_track(artist, track).get_duration()
                     duration_ms = int(raw) if raw else None
@@ -1135,6 +1215,16 @@ async def song_stats(
                     fetch_and_cache_durations, [(artist_name, track_name, mbid)]
                 )
 
+        # Find similar recordings (variants of the same performance)
+        current_duration_ms = duration_row[0] if duration_row and duration_row[0] else None
+        similar_tracks = find_similar_tracks(conn, artist_name, track_name, current_duration_ms)
+        combined_plays = total_plays + sum(t["plays"] for t in similar_tracks)
+        combined_time = (
+            format_listening_time(current_duration_ms * combined_plays)
+            if current_duration_ms
+            else None
+        )
+
         # Get listening history
         cursor.execute(
             """
@@ -1180,6 +1270,9 @@ async def song_stats(
             "history_chart": history_json,
             "listening_time": listening_time,
             "duration_fetched": duration_fetched,
+            "similar_tracks": similar_tracks,
+            "combined_plays": combined_plays,
+            "combined_time": combined_time,
         },
     )
 

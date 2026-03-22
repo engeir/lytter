@@ -162,9 +162,12 @@
       container.innerHTML = selectedArtists.map((a, i) =>
         `<span class="badge d-inline-flex align-items-center gap-1 py-2 px-3" style="background-color: ${COLORS[i]}20; color: ${COLORS[i]}; border: 1px solid ${COLORS[i]}; font-size: 0.9rem">
           ${escapeHtml(a)}
-          <button type="button" class="btn-close btn-close-white" style="font-size: 0.6rem; filter: none; opacity:0.8" aria-label="Remove" onclick="removeArtist(${JSON.stringify(a)})"></button>
+          <button type="button" class="btn-close btn-close-white compare-remove-btn" data-artist="${escapeAttr(a)}" style="font-size: 0.6rem; filter: none; opacity:0.8" aria-label="Remove"></button>
         </span>`
       ).join('');
+      container.querySelectorAll('.compare-remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => removeArtist(btn.dataset.artist));
+      });
     }
 
     // --- Comparison data ---

@@ -179,4 +179,4 @@ numpydoc-section-hyphen-length = true
 split-summary-body = true
 strip-whitespaces = true
 style = ["pep257", "numpydoc"]
-write = true
+write = false

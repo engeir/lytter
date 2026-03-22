@@ -24,6 +24,7 @@ local linters = new Mapping<String, Step> {
     ["pydocstringformatter"] {
         glob = "*py"
         check = "pydocstringformatter {{files}} >/dev/null"
+        fix = "pydocstringformatter --write {{files}} >/dev/null"
     }
     ["xdoctest"] {
         glob = "*py"

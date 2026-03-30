@@ -67,7 +67,11 @@ CONSECUTIVE_SCROBBLES_THRESHOLD = 50
 MUSICBRAINZ_USER_AGENT = "lytter/1.0 (https://github.com/engeir/lytter)"
 MUSICBRAINZ_SEARCH_URL = "https://musicbrainz.org/ws/2/recording/"
 DEEZER_SEARCH_URL = "https://api.deezer.com/search"
+SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
+SPOTIFY_SEARCH_URL = "https://api.spotify.com/v1/search"
 DURATION_RETRY_DAYS = 30
+
+_spotify_token: dict[str, object] = {}  # keys: access_token, expires_at
 
 _VARIANT_RE = re.compile(
     r"\s*[-–(]\s*"
@@ -311,13 +315,53 @@ def _deezer_search(artist: str, track: str) -> int | None:
     return None
 
 
+def _spotify_search(artist: str, track: str) -> int | None:
+    """Search Spotify by artist + track name.
+
+    Returns duration in ms or None. Requires SPOTIFY_CLIENT_ID and
+    SPOTIFY_CLIENT_SECRET environment variables; returns None if absent.
+    Token is cached in-process until expiry.
+    """
+    client_id = os.environ.get("SPOTIFY_CLIENT_ID")
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return None
+    # Refresh token if missing or expired
+    now = _time.time()
+    if not _spotify_token or float(str(_spotify_token.get("expires_at", 0))) <= now:
+        resp = requests.post(
+            SPOTIFY_TOKEN_URL,
+            data={"grant_type": "client_credentials"},
+            auth=(client_id, client_secret),
+            timeout=10,
+        )
+        if resp.status_code != 200:  # noqa: PLR2004
+            return None
+        data = resp.json()
+        _spotify_token["access_token"] = data["access_token"]
+        _spotify_token["expires_at"] = now + int(data.get("expires_in", 3600)) - 60
+    token = str(_spotify_token["access_token"])
+    resp = requests.get(
+        SPOTIFY_SEARCH_URL,
+        params={"q": f'track:"{track}" artist:"{artist}"', "type": "track", "limit": "1"},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    if resp.status_code == 200:  # noqa: PLR2004
+        items = resp.json().get("tracks", {}).get("items", [])
+        if items and items[0].get("duration_ms"):
+            return int(items[0]["duration_ms"])
+    return None
+
+
 def _fetch_duration_from_mb(artist: str, track: str, mbid: str | None) -> int | None:
     """Fetch track duration using multiple sources in order of preference.
 
     1. MusicBrainz MBID lookup (exact, fast)
-    2. Deezer search (handles variant title formats, broad streaming coverage)
-    3. MusicBrainz name search, full title
-    4. MusicBrainz name search, cleaned title (strips "- Remastered" etc.)
+    2. Spotify search (high confidence, broad streaming coverage)
+    3. Deezer search (handles variant title formats, covers independent releases)
+    4. MusicBrainz name search, full title
+    5. MusicBrainz name search, cleaned title (strips "- Remastered" etc.)
 
     Returns duration in milliseconds, or None if not found anywhere.
     """
@@ -335,17 +379,21 @@ def _fetch_duration_from_mb(artist: str, track: str, mbid: str | None) -> int | 
                 return int(length)
         _time.sleep(1.1)
     search_title = _normalize_title(track)
-    # 2. Deezer
+    # 2. Spotify
+    result = _spotify_search(artist, search_title)
+    if result:
+        return result
+    # 3. Deezer
     result = _deezer_search(artist, search_title)
     if result:
         return result
     _time.sleep(1.1)
-    # 3. MusicBrainz name search, full title (date-normalized)
+    # 4. MusicBrainz name search, full title (date-normalized)
     result = _mb_name_search(artist, search_title)
     if result:
         return result
     _time.sleep(1.1)
-    # 4. MusicBrainz name search, cleaned title (non-live suffixes stripped)
+    # 5. MusicBrainz name search, cleaned title (non-live suffixes stripped)
     cleaned = _clean_track_title(search_title)
     if cleaned:
         result = _mb_name_search(artist, cleaned)

@@ -1,0 +1,14 @@
+{% if genres %}
+  {% set max_score = genres[0].score %}
+  {% for g in genres %}
+    <div class="bar-chart-item">
+      <span class="bar-chart-item-link">{{ g.genre }}</span>
+      <div class="bar-chart-visual">
+        <div class="bar-chart-bar" style="width: {{ ((g.score / max_score) * 100)|round }}%;"></div>
+        <span class="bar-chart-value">{{ g.score|int }}</span>
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="text-muted small mb-0">No genre data yet. Visit some artist pages to populate genres.</p>
+{% endif %}

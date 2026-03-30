@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Discovery Timeline - Last.fm Stats{% endblock %}
+
+{% block content %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1>Discovery Timeline</h1>
+      <p class="text-muted">Artists sorted by when you first listened to them.</p>
+    </div>
+  </div>
+
+  {% for year, artists in years %}
+    <div class="row mb-4">
+      <div class="col-12">
+        <h3 class="mb-3">
+          {{ year }} <span class="text-muted small fw-normal">— {{ artists|length }} new artists</span>
+        </h3>
+        <div class="d-flex flex-wrap gap-2">
+          {% for entry in artists %}
+            <a href="/artist/{{ entry.artist|urlencode }}"
+               class="badge text-decoration-none"
+               style="background-color: var(--card-bg);
+                      color: var(--text-primary);
+                      border: 1px solid var(--border-color);
+                      font-size: 0.85rem;
+                      padding: 0.4em 0.7em"
+               title="First heard {{ entry.date }} {{ year }}">{{ entry.artist }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+{% endblock %}

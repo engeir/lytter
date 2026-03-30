@@ -355,7 +355,7 @@ wheels = [
 
 [[package]]
 name = "lytter"
-version = "2026.3.6"
+version = "2026.3.7"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

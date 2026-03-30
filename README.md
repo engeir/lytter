@@ -12,7 +12,9 @@ API_KEY=your_lastfm_api_key
 API_SECRET=your_lastfm_api_secret
 USER_NAME=your_lastfm_username
 PASSWORD=your_lastfm_password
-GENIUS_TOKEN=your_genius_api_token  # optional, for lyrics
+GENIUS_TOKEN=your_genius_api_token        # optional, for lyrics
+SPOTIFY_CLIENT_ID=your_spotify_client_id  # optional, improves duration accuracy
+SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 ```
 
 ## Install
@@ -115,6 +117,12 @@ uv run lytter-cron
 uv run lytter-status
 # Check for gaps
 uv run lytter-gaps
+# Fetch durations for all tracks missing them
+uv run lytter-duration
+# Also retry previously failed lookups
+uv run lytter-duration --retry-failed
+# Re-fetch durations for the entire library (e.g. after adding a new source)
+uv run lytter-duration --force
 ```
 
 **Or as modules:**

@@ -16,8 +16,23 @@
     </ol>
   </nav>
 
-  <h1 class="mb-2">{{ album_name }}</h1>
-  <h5 class="text-muted mb-4">by {{ artist_name }}</h5>
+  <div class="row align-items-start mb-4">
+    {% if album_art_url %}
+      <div class="col-auto">
+        <img src="{{ album_art_url }}"
+             alt="{{ album_name }} cover"
+             style="width: 120px;
+                    height: 120px;
+                    object-fit: cover;
+                    border-radius: 8px">
+      </div>
+    {% endif %}
+    <div class="col">
+      <h1 class="mb-1">{{ album_name }}</h1>
+      <h5 class="text-muted mb-1">by {{ artist_name }}</h5>
+      {% if first_heard %}<p class="text-muted small mb-0">First heard: {{ first_heard }}</p>{% endif %}
+    </div>
+  </div>
 
   <div class="row mb-4">
     <div class="col-md-4">{{ stat_card("Total Plays", total_plays) }}</div>

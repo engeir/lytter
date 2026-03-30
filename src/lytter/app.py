@@ -76,6 +76,8 @@ SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_SEARCH_URL = "https://api.spotify.com/v1/search"
 DURATION_RETRY_DAYS = 30
 LYRICS_RETRY_DAYS = 90
+GENRES_RETRY_DAYS = 90
+METADATA_RETRY_DAYS = 30
 
 _spotify_token: dict[str, object] = {}  # keys: access_token, expires_at
 
@@ -149,6 +151,49 @@ def init_db():
                 lyrics TEXT,
                 fetched_at INTEGER NOT NULL,
                 PRIMARY KEY (artist, track)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS artist_genres (
+                artist TEXT PRIMARY KEY,
+                tags TEXT NOT NULL,
+                fetched_at INTEGER NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS track_audio_features (
+                artist TEXT NOT NULL,
+                track TEXT NOT NULL,
+                spotify_id TEXT,
+                danceability REAL,
+                energy REAL,
+                valence REAL,
+                tempo REAL,
+                acousticness REAL,
+                instrumentalness REAL,
+                fetched_at INTEGER NOT NULL,
+                PRIMARY KEY (artist, track)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS track_metadata (
+                artist TEXT NOT NULL,
+                track TEXT NOT NULL,
+                release_date TEXT,
+                popularity INTEGER,
+                album_art_url TEXT,
+                global_listeners INTEGER,
+                global_plays INTEGER,
+                fetched_at INTEGER NOT NULL,
+                PRIMARY KEY (artist, track)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS artist_metadata (
+                artist TEXT PRIMARY KEY,
+                bio TEXT,
+                similar_artists TEXT,
+                fetched_at INTEGER NOT NULL
             )
         """)
 
@@ -330,18 +375,16 @@ def _deezer_search(artist: str, track: str) -> int | None:
     return None
 
 
-def _spotify_search(artist: str, track: str) -> int | None:
-    """Search Spotify by artist + track name.
+def _spotify_get_token() -> str | None:
+    """Return a valid Spotify bearer token, refreshing if needed.
 
-    Returns duration in ms or None. Requires SPOTIFY_CLIENT_ID and
-    SPOTIFY_CLIENT_SECRET environment variables; returns None if absent.
-    Token is cached in-process until expiry.
+    Returns None if SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET are not set or
+    if the token request fails.
     """
     client_id = os.environ.get("SPOTIFY_CLIENT_ID")
     client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
     if not client_id or not client_secret:
         return None
-    # Refresh token if missing or expired
     now = _time.time()
     if not _spotify_token or float(str(_spotify_token.get("expires_at", 0))) <= now:
         resp = requests.post(
@@ -355,7 +398,19 @@ def _spotify_search(artist: str, track: str) -> int | None:
         data = resp.json()
         _spotify_token["access_token"] = data["access_token"]
         _spotify_token["expires_at"] = now + int(data.get("expires_in", 3600)) - 60
-    token = str(_spotify_token["access_token"])
+    return str(_spotify_token["access_token"])
+
+
+def _spotify_search(artist: str, track: str) -> int | None:
+    """Search Spotify by artist + track name.
+
+    Returns duration in ms or None. Requires SPOTIFY_CLIENT_ID and
+    SPOTIFY_CLIENT_SECRET environment variables; returns None if absent.
+    Token is cached in-process until expiry.
+    """
+    token = _spotify_get_token()
+    if not token:
+        return None
     resp = requests.get(
         SPOTIFY_SEARCH_URL,
         params={"q": f'track:"{track}" artist:"{artist}"', "type": "track", "limit": "1"},
@@ -474,6 +529,165 @@ def fetch_and_cache_lyrics(artist: str, track: str) -> None:
         conn.execute(
             "INSERT OR REPLACE INTO lyrics (artist, track, lyrics, fetched_at) VALUES (?, ?, ?, ?)",
             (artist, track, lyrics, int(_time.time())),
+        )
+
+
+def fetch_and_cache_artist_genres(artist: str) -> None:
+    """Fetch Last.fm tags for an artist and cache in the database.
+
+    Stores an empty list if the lookup fails, to avoid hammering the API.
+    Retried after GENRES_RETRY_DAYS if empty.
+    """
+    tags: list[dict[str, object]] = []
+    try:
+        top_tags = network.get_artist(artist).get_top_tags(limit=10)
+        tags = [{"tag": str(t.item), "weight": int(t.weight)} for t in top_tags]
+    except Exception:
+        pass
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO artist_genres (artist, tags, fetched_at) VALUES (?, ?, ?)",
+            (artist, json.dumps(tags), int(_time.time())),
+        )
+
+
+def _compute_streaks(conn: sqlite3.Connection) -> tuple[int, int]:
+    """Compute current and longest scrobble streaks in days.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open database connection.
+
+    Returns
+    -------
+    tuple[int, int]
+        (current_streak, longest_streak)
+    """
+    rows = conn.execute(
+        "SELECT DISTINCT DATE(timestamp, 'unixepoch') FROM musiclibrary ORDER BY 1"
+    ).fetchall()
+    if not rows:
+        return 0, 0
+    dates = [datetime.date.fromisoformat(r[0]) for r in rows]
+    today = datetime.date.today()
+    longest = current = 1
+    run = 1
+    for i in range(1, len(dates)):
+        if (dates[i] - dates[i - 1]).days == 1:
+            run += 1
+            longest = max(longest, run)
+        else:
+            run = 1
+    # Current streak: count backwards from today
+    current = 0
+    for d in reversed(dates):
+        expected = today - datetime.timedelta(days=current)
+        if d == expected:
+            current += 1
+        elif d == expected - datetime.timedelta(days=1) and current == 0:
+            # Last scrobble was yesterday — streak still alive
+            current = 1
+        else:
+            break
+    return current, longest
+
+
+def fetch_and_cache_track_metadata(artist: str, track: str, mbid: str | None = None) -> None:
+    """Fetch and cache release date, album art, popularity, and global Last.fm stats.
+
+    Sources tried in order:
+    1. Spotify search (art, release_date, popularity) — if configured
+    2. MusicBrainz MBID lookup (release_date) — if mbid provided and Spotify missed it
+    3. Last.fm (global_listeners, global_plays)
+
+    Always writes a row so the page stops retrying on failure.
+    """
+    release_date: str | None = None
+    popularity: int | None = None
+    album_art_url: str | None = None
+    global_listeners: int | None = None
+    global_plays: int | None = None
+
+    token = _spotify_get_token()
+    if token:
+        try:
+            resp = requests.get(
+                SPOTIFY_SEARCH_URL,
+                params={"q": f'track:"{track}" artist:"{artist}"', "type": "track", "limit": "1"},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            if resp.status_code == 200:  # noqa: PLR2004
+                items = resp.json().get("tracks", {}).get("items", [])
+                if items:
+                    item = items[0]
+                    popularity = item.get("popularity")
+                    album = item.get("album", {})
+                    release_date = album.get("release_date")
+                    images = album.get("images", [])
+                    if images:
+                        album_art_url = images[0]["url"]
+        except Exception:
+            pass
+
+    if not release_date and mbid:
+        try:
+            resp = requests.get(
+                f"https://musicbrainz.org/ws/2/recording/{mbid}?fmt=json",
+                headers={"User-Agent": MUSICBRAINZ_USER_AGENT},
+                timeout=10,
+            )
+            if resp.status_code == 200:  # noqa: PLR2004
+                release_date = resp.json().get("first-release-date")
+            _time.sleep(1.1)
+        except Exception:
+            pass
+
+    try:
+        lfm_track = network.get_track(artist, track)
+        raw_listeners = lfm_track.get_listener_count()
+        raw_plays = lfm_track.get_playcount()
+        global_listeners = int(raw_listeners) if raw_listeners else None
+        global_plays = int(raw_plays) if raw_plays else None
+    except Exception:
+        pass
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO track_metadata
+               (artist, track, release_date, popularity, album_art_url,
+                global_listeners, global_plays, fetched_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (artist, track, release_date, popularity, album_art_url,
+             global_listeners, global_plays, int(_time.time())),
+        )
+
+
+def fetch_and_cache_artist_metadata(artist: str) -> None:
+    """Fetch and cache artist bio and similar artists from Last.fm.
+
+    Always writes a row (NULLs on failure) so the page stops retrying.
+    """
+    bio: str | None = None
+    similar: list[dict[str, object]] = []
+    try:
+        lfm_artist = network.get_artist(artist)
+        raw_bio = lfm_artist.get_bio_summary()
+        if raw_bio:
+            # Strip HTML tags
+            bio = re.sub(r"<[^>]+>", "", raw_bio).strip() or None
+        similar_items = lfm_artist.get_similar(limit=5)
+        similar = [
+            {"artist": str(s.item), "match": round(float(s.match), 2)}
+            for s in similar_items
+        ]
+    except Exception:
+        pass
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO artist_metadata (artist, bio, similar_artists, fetched_at) VALUES (?, ?, ?, ?)",
+            (artist, bio, json.dumps(similar), int(_time.time())),
         )
 
 
@@ -748,6 +962,7 @@ async def index(request: Request):
         known_track_count = sum(1 for row in rows if row[3])
         total_track_count = len(rows)
         total_listening_time = format_listening_time(total_ms) if known_track_count > 0 else None
+        current_streak, longest_streak = _compute_streaks(conn)
 
     # Get current playing track
     current_track = None
@@ -777,6 +992,8 @@ async def index(request: Request):
             "total_listening_time": total_listening_time,
             "listening_time_known_tracks": known_track_count,
             "listening_time_total_tracks": total_track_count,
+            "current_streak": current_streak,
+            "longest_streak": longest_streak,
         },
     )
 
@@ -811,6 +1028,14 @@ async def artist_stats(
             (artist_name,),
         )
         unique_albums = cursor.fetchone()[0]
+
+        first_heard_ts = cursor.execute(
+            "SELECT MIN(timestamp) FROM musiclibrary WHERE artist = ?", (artist_name,)
+        ).fetchone()[0]
+        first_heard = (
+            datetime.datetime.fromtimestamp(first_heard_ts).strftime("%-d %B %Y")
+            if first_heard_ts else None
+        )
 
         # Get per-track play counts and durations
         cursor.execute(
@@ -855,6 +1080,46 @@ async def artist_stats(
     if missing:
         background_tasks.add_task(fetch_and_cache_durations, missing)
 
+    # Genre tags
+    with sqlite3.connect(DB_NAME) as conn:
+        genre_row = conn.execute(
+            "SELECT tags, fetched_at FROM artist_genres WHERE artist = ?",
+            (artist_name,),
+        ).fetchone()
+    if genre_row is None:
+        background_tasks.add_task(fetch_and_cache_artist_genres, artist_name)
+        genres: list[dict[str, object]] = []
+        genres_fetched = False
+    else:
+        genres = json.loads(genre_row[0])
+        genres_fetched = True
+        if not genres and _time.time() - genre_row[1] > GENRES_RETRY_DAYS * 86_400:
+            with sqlite3.connect(DB_NAME) as conn:
+                conn.execute("DELETE FROM artist_genres WHERE artist = ?", (artist_name,))
+            background_tasks.add_task(fetch_and_cache_artist_genres, artist_name)
+            genres_fetched = False
+
+    # Artist metadata (bio + similar artists)
+    with sqlite3.connect(DB_NAME) as conn:
+        meta_row = conn.execute(
+            "SELECT bio, similar_artists, fetched_at FROM artist_metadata WHERE artist = ?",
+            (artist_name,),
+        ).fetchone()
+    if meta_row is None:
+        background_tasks.add_task(fetch_and_cache_artist_metadata, artist_name)
+        artist_bio: str | None = None
+        artist_similar: list[dict[str, object]] = []
+        artist_metadata_fetched = False
+    else:
+        artist_bio = meta_row[0]
+        artist_similar = json.loads(meta_row[1]) if meta_row[1] else []
+        artist_metadata_fetched = True
+        if not artist_bio and not artist_similar and _time.time() - meta_row[2] > METADATA_RETRY_DAYS * 86_400:
+            with sqlite3.connect(DB_NAME) as conn:
+                conn.execute("DELETE FROM artist_metadata WHERE artist = ?", (artist_name,))
+            background_tasks.add_task(fetch_and_cache_artist_metadata, artist_name)
+            artist_metadata_fetched = False
+
     return templates.TemplateResponse(
         "artist.html",
         {
@@ -867,6 +1132,12 @@ async def artist_stats(
             "listening_time": listening_time,
             "known_tracks": known_tracks,
             "total_unique_tracks": total_unique_tracks,
+            "genres": genres,
+            "genres_fetched": genres_fetched,
+            "first_heard": first_heard,
+            "bio": artist_bio,
+            "similar_artists": artist_similar,
+            "artist_metadata_fetched": artist_metadata_fetched,
         },
     )
 
@@ -1178,6 +1449,25 @@ async def album_stats(
             conn, tracks_plays
         )
 
+        first_heard_ts = cursor.execute(
+            "SELECT MIN(timestamp) FROM musiclibrary WHERE artist = ? AND album = ?",
+            (artist_name, album_name),
+        ).fetchone()[0]
+        first_heard = (
+            datetime.datetime.fromtimestamp(first_heard_ts).strftime("%-d %B %Y")
+            if first_heard_ts else None
+        )
+
+        # Best-effort album art from any cached track in this album
+        art_row = cursor.execute(
+            """SELECT tm.album_art_url FROM track_metadata tm
+               JOIN musiclibrary m ON m.artist = tm.artist AND m.track = tm.track
+               WHERE m.artist = ? AND m.album = ? AND tm.album_art_url IS NOT NULL
+               LIMIT 1""",
+            (artist_name, album_name),
+        ).fetchone()
+        album_art_url = art_row[0] if art_row else None
+
         stale_cutoff = int(_time.time()) - DURATION_RETRY_DAYS * 86_400
         cursor.execute(
             "SELECT track FROM track_durations WHERE artist = ?", (artist_name,)
@@ -1248,6 +1538,8 @@ async def album_stats(
             "listening_time": listening_time,
             "known_tracks": known_tracks,
             "total_unique_tracks": total_unique_tracks,
+            "first_heard": first_heard,
+            "album_art_url": album_art_url,
         },
     )
 
@@ -1278,6 +1570,15 @@ async def song_stats(
             (artist_name, track_name),
         )
         unique_albums = cursor.fetchone()[0]
+
+        first_heard_ts = cursor.execute(
+            "SELECT MIN(timestamp) FROM musiclibrary WHERE artist = ? AND track = ?",
+            (artist_name, track_name),
+        ).fetchone()[0]
+        first_heard = (
+            datetime.datetime.fromtimestamp(first_heard_ts).strftime("%-d %B %Y")
+            if first_heard_ts else None
+        )
 
         # Look up cached duration for this track
         cursor.execute(
@@ -1342,6 +1643,37 @@ async def song_stats(
                     background_tasks.add_task(fetch_and_cache_lyrics, artist_name, track_name)
                 lyrics_fetched = False
 
+        # Track metadata (release date, art, popularity, global stats)
+        meta_row = cursor.execute(
+            """SELECT release_date, popularity, album_art_url, global_listeners,
+                      global_plays, fetched_at FROM track_metadata
+               WHERE artist = ? AND track = ?""",
+            (artist_name, track_name),
+        ).fetchone()
+        if meta_row is None:
+            background_tasks.add_task(fetch_and_cache_track_metadata, artist_name, track_name, mbid)
+            track_meta: dict[str, object] | None = None
+            track_meta_fetched = False
+        else:
+            track_meta_fetched = True
+            if any(v is not None for v in meta_row[:5]):
+                track_meta = {
+                    "release_date": meta_row[0],
+                    "popularity": meta_row[1],
+                    "album_art_url": meta_row[2],
+                    "global_listeners": meta_row[3],
+                    "global_plays": meta_row[4],
+                }
+            else:
+                track_meta = None
+                if _time.time() - meta_row[5] > METADATA_RETRY_DAYS * 86_400:
+                    cursor.execute(
+                        "DELETE FROM track_metadata WHERE artist = ? AND track = ?",
+                        (artist_name, track_name),
+                    )
+                    background_tasks.add_task(fetch_and_cache_track_metadata, artist_name, track_name, mbid)
+                    track_meta_fetched = False
+
         # Find similar recordings (variants of the same performance)
         current_duration_ms = duration_row[0] if duration_row and duration_row[0] else None
         track_duration = format_track_duration(current_duration_ms) if current_duration_ms else None
@@ -1404,6 +1736,9 @@ async def song_stats(
             "combined_time": combined_time,
             "lyrics": lyrics,
             "lyrics_fetched": lyrics_fetched,
+            "first_heard": first_heard,
+            "track_meta": track_meta,
+            "track_meta_fetched": track_meta_fetched,
         },
     )
 
@@ -2340,6 +2675,149 @@ async def yearly_evolution(
         "items": list(all_top_items),
         "data": result_data,
     }
+
+
+def _aggregate_genres(
+    rows: list[tuple[str, int, str]], top_n: int = 20
+) -> list[dict[str, object]]:
+    """Aggregate genre tags weighted by play count.
+
+    Parameters
+    ----------
+    rows : list[tuple[str, int, str]]
+        Rows of (artist, plays, tags_json).
+    top_n : int
+        Number of top genres to return.
+
+    Returns
+    -------
+    list[dict[str, object]]
+        Dicts of {"genre": str, "score": float} sorted descending.
+    """
+    totals: dict[str, float] = {}
+    for _artist, plays, tags_json in rows:
+        for entry in json.loads(tags_json):
+            tag = str(entry["tag"]).lower()
+            weight = int(entry.get("weight", 1))
+            totals[tag] = totals.get(tag, 0.0) + plays * (weight / 100)
+    sorted_tags = sorted(totals.items(), key=lambda x: x[1], reverse=True)
+    return [{"genre": tag, "score": round(score, 1)} for tag, score in sorted_tags[:top_n]]
+
+
+@app.get("/genre-stats", response_class=HTMLResponse)
+async def genre_stats_page(request: Request):
+    """Genre statistics page."""
+    with sqlite3.connect(DB_NAME) as conn:
+        years = [
+            row[0]
+            for row in conn.execute(
+                "SELECT DISTINCT strftime('%Y', timestamp, 'unixepoch') as year FROM musiclibrary ORDER BY year DESC"
+            ).fetchall()
+        ]
+    return templates.TemplateResponse(
+        "genre_stats.html", {"request": request, "years": years}
+    )
+
+
+@app.get("/html/genre/top-genres", response_class=HTMLResponse)
+async def genre_top_genres(request: Request, limit: int = 20):
+    """Top genres overall as HTML fragment."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            """SELECT m.artist, COUNT(*) as plays, ag.tags
+               FROM musiclibrary m
+               JOIN artist_genres ag ON ag.artist = m.artist
+               WHERE ag.tags != '[]'
+               GROUP BY m.artist""",
+        ).fetchall()
+    genres = _aggregate_genres(rows, top_n=limit)
+    return templates.TemplateResponse(
+        "_genre_list.html", {"request": request, "genres": genres}
+    )
+
+
+@app.get("/html/genre/top-genres-year", response_class=HTMLResponse)
+async def genre_top_genres_year(request: Request, year: str, limit: int = 20):
+    """Top genres for a specific year as HTML fragment."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            """SELECT m.artist, COUNT(*) as plays, ag.tags
+               FROM musiclibrary m
+               JOIN artist_genres ag ON ag.artist = m.artist
+               WHERE ag.tags != '[]'
+                 AND strftime('%Y', m.timestamp, 'unixepoch') = ?
+               GROUP BY m.artist""",
+            (year,),
+        ).fetchall()
+    genres = _aggregate_genres(rows, top_n=limit)
+    return templates.TemplateResponse(
+        "_genre_list.html", {"request": request, "genres": genres}
+    )
+
+
+@app.get("/api/genre/evolution")
+async def genre_evolution():
+    """Genre distribution over years for stacked area chart."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            """SELECT strftime('%Y', m.timestamp, 'unixepoch') as year,
+                      m.artist, COUNT(*) as plays, ag.tags
+               FROM musiclibrary m
+               JOIN artist_genres ag ON ag.artist = m.artist
+               WHERE ag.tags != '[]'
+               GROUP BY year, m.artist
+               ORDER BY year""",
+        ).fetchall()
+
+    # Aggregate per year
+    year_totals: dict[str, dict[str, float]] = {}
+    for year, _artist, plays, tags_json in rows:
+        if year not in year_totals:
+            year_totals[year] = {}
+        for entry in json.loads(tags_json):
+            tag = str(entry["tag"]).lower()
+            weight = int(entry.get("weight", 1))
+            year_totals[year][tag] = year_totals[year].get(tag, 0.0) + plays * (weight / 100)
+
+    # Find top 8 genres overall
+    overall: dict[str, float] = {}
+    for ytags in year_totals.values():
+        for tag, score in ytags.items():
+            overall[tag] = overall.get(tag, 0.0) + score
+    top_genres = [g for g, _ in sorted(overall.items(), key=lambda x: x[1], reverse=True)[:8]]
+
+    years = sorted(year_totals.keys())
+    series = []
+    for genre in top_genres:
+        raw = [year_totals[y].get(genre, 0.0) for y in years]
+        year_sums = [sum(year_totals[y].values()) for y in years]
+        pct = [round(raw[i] / year_sums[i] * 100, 1) if year_sums[i] else 0.0 for i in range(len(years))]
+        series.append({"genre": genre, "data": pct})
+
+    return {"years": years, "series": series}
+
+
+@app.get("/discovery", response_class=HTMLResponse)
+async def discovery_page(request: Request):
+    """Music discovery timeline — artists sorted by first scrobble date."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            "SELECT artist, MIN(timestamp) as first_heard FROM musiclibrary GROUP BY artist ORDER BY first_heard ASC"
+        ).fetchall()
+
+    years_data: dict[str, list[dict[str, str]]] = {}
+    for artist, ts in rows:
+        dt = datetime.datetime.fromtimestamp(ts)
+        year = str(dt.year)
+        if year not in years_data:
+            years_data[year] = []
+        years_data[year].append({"artist": artist, "date": dt.strftime("%-d %b")})
+
+    # Reverse so most recent year is first
+    ordered = [(y, years_data[y]) for y in sorted(years_data.keys(), reverse=True)]
+    return templates.TemplateResponse(
+        "discovery.html", {"request": request, "years": ordered}
+    )
 
 
 def main():

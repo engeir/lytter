@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Genre Stats - Last.fm Stats{% endblock %}
+
+{% block content %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-4">Genre Statistics</h1>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Top Genres Overall</h5>
+          <div hx-get="/html/genre/top-genres?limit=20" hx-trigger="load" hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Top Genres by Year</h5>
+          <div class="mb-3">
+            <select id="year-select" class="form-select form-select-sm" style="width: auto;">
+              {% for year in years %}
+                <option value="{{ year }}" {% if loop.first %}selected{% endif %}>{{ year }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div id="year-genre-list"
+               hx-get="/html/genre/top-genres-year?year={{ years[0] }}&limit=20"
+               hx-trigger="load"
+               hx-swap="innerHTML">
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 100px">
+              <div class="loading-spinner"></div>
+              <span class="text-muted">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Genre Evolution Over Time</h5>
+          <p class="text-muted small">Share of listening per genre (top 8) weighted by play count and Last.fm tag strength.</p>
+          <div id="evolution-chart" style="min-height: 400px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    // Year selector triggers HTMX reload
+    document.getElementById('year-select').addEventListener('change', function () {
+      const year = this.value;
+      htmx.ajax('GET', `/html/genre/top-genres-year?year=${year}&limit=20`, {
+        target: '#year-genre-list',
+        swap: 'innerHTML'
+      });
+    });
+
+    // Genre evolution chart
+    fetch('/api/genre/evolution')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.years || data.years.length === 0) {
+          document.getElementById('evolution-chart').innerHTML =
+            '<p class="text-muted">No genre data yet. Visit artist pages to populate genres.</p>';
+          return;
+        }
+        const colors = [
+          '#58a6ff', '#3fb950', '#f78166', '#d2a8ff',
+          '#ffa657', '#79c0ff', '#56d364', '#ff7b72'
+        ];
+        const traces = data.series.map((s, i) => ({
+          x: data.years,
+          y: s.data,
+          name: s.genre,
+          type: 'scatter',
+          mode: 'lines',
+          stackgroup: 'one',
+          line: { color: colors[i % colors.length] },
+          hovertemplate: `%{y:.1f}%<extra>${s.genre}</extra>`
+        }));
+        const layout = {
+          paper_bgcolor: '#161b22',
+          plot_bgcolor: '#161b22',
+          font: { color: '#f0f6fc' },
+          xaxis: { gridcolor: '#30363d', color: '#f0f6fc' },
+          yaxis: { gridcolor: '#30363d', color: '#f0f6fc', ticksuffix: '%', range: [0, 100] },
+          legend: { bgcolor: 'rgba(0,0,0,0)', font: { color: '#f0f6fc' } },
+          margin: { t: 20 },
+        };
+        Plotly.newPlot('evolution-chart', traces, layout, { responsive: true });
+      });
+  </script>
+{% endblock %}

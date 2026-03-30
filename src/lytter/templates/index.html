@@ -44,6 +44,8 @@
         {{ stat_card('Listening Time', '—') }}
       {% endif %}
     </div>
+    <div class="col">{{ stat_card("Current Streak", current_streak ~ " days") }}</div>
+    <div class="col">{{ stat_card("Longest Streak", longest_streak ~ " days") }}</div>
   </div>
 
   <div class="row">

@@ -42,6 +42,65 @@
     </div>
   </div>
 
+  {% if first_heard %}<p class="text-muted small mb-3">First heard: {{ first_heard }}</p>{% endif %}
+
+  {% if track_meta or not track_meta_fetched %}
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">
+              Track Info
+              {% if not track_meta_fetched %}<span class="text-muted small fw-normal ms-2">Loading…</span>{% endif %}
+            </h5>
+            {% if track_meta %}
+              <div class="d-flex flex-wrap gap-4">
+                {% if track_meta.release_date %}
+                  <div>
+                    <span class="text-muted small">Released</span>
+                    <br>
+                    <strong>{{ track_meta.release_date[:4] }}</strong>
+                  </div>
+                {% endif %}
+                {% if track_meta.global_listeners %}
+                  <div>
+                    <span class="text-muted small">Last.fm Listeners</span>
+                    <br>
+                    <strong>{{ "{:,}".format(track_meta.global_listeners) }}</strong>
+                  </div>
+                {% endif %}
+                {% if track_meta.global_plays %}
+                  <div>
+                    <span class="text-muted small">Last.fm Plays</span>
+                    <br>
+                    <strong>{{ "{:,}".format(track_meta.global_plays) }}</strong>
+                  </div>
+                {% endif %}
+                {% if track_meta.popularity is not none %}
+                  <div>
+                    <span class="text-muted small">Spotify Popularity</span>
+                    <br>
+                    <strong>{{ track_meta.popularity }}/100</strong>
+                  </div>
+                {% endif %}
+              </div>
+              {% if track_meta.album_art_url %}
+                <div class="mt-3">
+                  <img src="{{ track_meta.album_art_url }}"
+                       alt="Album art"
+                       style="width: 80px;
+                              height: 80px;
+                              object-fit: cover;
+                              border-radius: 6px">
+                </div>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
   <div class="row mb-4">
     <div class="col-12">
       <div class="card">
@@ -88,11 +147,7 @@
           </summary>
           {% if lyrics %}
             <div class="card-body pt-0">
-              <pre style="white-space: pre-wrap;
-                          font-family: inherit;
-                          margin: 0;
-                          color: var(--text-primary);
-                          background-color: transparent">{{ lyrics }}</pre>
+              <pre style="white-space: pre-wrap; font-family: inherit; margin: 0; background-color: transparent;">{{ lyrics }}</pre>
             </div>
           {% endif %}
         </details>

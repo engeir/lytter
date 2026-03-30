@@ -872,7 +872,8 @@ class CurrentStats:
         dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
         counts = list(range(1, len(dates) + 1))
 
-        fig = px.line(x=dates, y=counts, title="Listening history")
+        df = pd.DataFrame({"date": dates, "count": counts})
+        fig = px.line(df, x="date", y="count", title="Listening history")
         fig.update_layout(
             title_x=0.5,
             xaxis_title="Time",
@@ -981,9 +982,9 @@ async def index(request: Request):
         pass
 
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
-            "request": request,
             "total_scrobbles": total_scrobbles,
             "unique_artists": unique_artists,
             "unique_tracks": unique_tracks,
@@ -1121,9 +1122,9 @@ async def artist_stats(
             artist_metadata_fetched = False
 
     return templates.TemplateResponse(
+        request,
         "artist.html",
         {
-            "request": request,
             "artist_name": artist_name,
             "total_plays": total_plays,
             "unique_tracks": unique_tracks,
@@ -1168,7 +1169,7 @@ async def top_artists_html(request: Request):
 
     artists = [{"artist": row[0], "plays": row[1]} for row in result]
     return templates.TemplateResponse(
-        "_top_artists_list.html", {"request": request, "artists": artists}
+        request, "_top_artists_list.html", {"artists": artists}
     )
 
 
@@ -1359,7 +1360,7 @@ async def recent_favorites_html(request: Request):
     # Reuse the same query logic
     stats = await recent_stats()
     return templates.TemplateResponse(
-        "_recent_favorites.html", {"request": request, **stats}
+        request, "_recent_favorites.html", {**stats}
     )
 
 
@@ -1503,7 +1504,8 @@ async def album_stats(
     dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
     counts = list(range(1, len(dates) + 1))
 
-    fig = px.line(x=dates, y=counts, title="Listening history")
+    df = pd.DataFrame({"date": dates, "count": counts})
+    fig = px.line(df, x="date", y="count", title="Listening history")
     fig.update_layout(
         title_x=0.5,
         xaxis_title="Time",
@@ -1527,9 +1529,9 @@ async def album_stats(
         background_tasks.add_task(fetch_and_cache_durations, missing)
 
     return templates.TemplateResponse(
+        request,
         "album.html",
         {
-            "request": request,
             "artist_name": artist_name,
             "album_name": album_name,
             "total_plays": total_plays,
@@ -1699,7 +1701,8 @@ async def song_stats(
     dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
     counts = list(range(1, len(dates) + 1))
 
-    fig = px.line(x=dates, y=counts, title="Listening history")
+    df = pd.DataFrame({"date": dates, "count": counts})
+    fig = px.line(df, x="date", y="count", title="Listening history")
     fig.update_layout(
         title_x=0.5,
         xaxis_title="Time",
@@ -1720,9 +1723,9 @@ async def song_stats(
     history_json = json.dumps(fig_dict)
 
     return templates.TemplateResponse(
+        request,
         "song.html",
         {
-            "request": request,
             "artist_name": artist_name,
             "track_name": track_name,
             "total_plays": total_plays,
@@ -1921,9 +1924,9 @@ async def yearly_stats(request: Request):
         years = [row[0] for row in cursor.fetchall()]
 
     return templates.TemplateResponse(
+        request,
         "yearly.html",
         {
-            "request": request,
             "years": years,
             "current_year": years[0] if years else None,
         },
@@ -2050,21 +2053,22 @@ async def yearly_top_items_html(
             return HTMLResponse(content="<p class='text-muted'>Invalid item type</p>")
 
     return templates.TemplateResponse(
+        request,
         "_yearly_top_items.html",
-        {"request": request, "items": items, "item_type": item_type},
+        {"items": items, "item_type": item_type},
     )
 
 
 @app.get("/duration-stats", response_class=HTMLResponse)
 async def duration_stats_page(request: Request):
     """Duration-based statistics page."""
-    return templates.TemplateResponse("duration_stats.html", {"request": request})
+    return templates.TemplateResponse(request, "duration_stats.html", {})
 
 
 @app.get("/compare", response_class=HTMLResponse)
 async def compare_page(request: Request):
     """Artist comparison page."""
-    return templates.TemplateResponse("compare.html", {"request": request})
+    return templates.TemplateResponse(request, "compare.html", {})
 
 
 @app.get("/api/compare/artists")
@@ -2230,8 +2234,9 @@ async def duration_top_songs(request: Request, limit: int = 20):
             for row in cursor.fetchall()
         ]
     return templates.TemplateResponse(
+        request,
         "_duration_top_items.html",
-        {"request": request, "items": items, "item_type": "songs"},
+        {"items": items, "item_type": "songs"},
     )
 
 
@@ -2262,8 +2267,9 @@ async def duration_top_albums(request: Request, limit: int = 20):
             for row in cursor.fetchall()
         ]
     return templates.TemplateResponse(
+        request,
         "_duration_top_items.html",
-        {"request": request, "items": items, "item_type": "albums"},
+        {"items": items, "item_type": "albums"},
     )
 
 
@@ -2293,8 +2299,9 @@ async def duration_top_artists(request: Request, limit: int = 20):
             for row in cursor.fetchall()
         ]
     return templates.TemplateResponse(
+        request,
         "_duration_top_items.html",
-        {"request": request, "items": items, "item_type": "artists"},
+        {"items": items, "item_type": "artists"},
     )
 
 
@@ -2326,8 +2333,9 @@ async def duration_longest_songs(request: Request, limit: int = 20, min_plays: i
             for row in cursor.fetchall()
         ]
     return templates.TemplateResponse(
+        request,
         "_duration_song_lengths.html",
-        {"request": request, "items": items, "direction": "longest"},
+        {"items": items, "direction": "longest"},
     )
 
 
@@ -2359,8 +2367,9 @@ async def duration_shortest_songs(request: Request, limit: int = 20, min_plays: 
             for row in cursor.fetchall()
         ]
     return templates.TemplateResponse(
+        request,
         "_duration_song_lengths.html",
-        {"request": request, "items": items, "direction": "shortest"},
+        {"items": items, "direction": "shortest"},
     )
 
 
@@ -2462,8 +2471,9 @@ async def duration_artists_by_length(
             for row in cursor.fetchall()
         ]
     return templates.TemplateResponse(
+        request,
         "_duration_artists_length.html",
-        {"request": request, "items": items},
+        {"items": items},
     )
 
 
@@ -2768,7 +2778,7 @@ async def genre_stats_page(request: Request):
             ).fetchall()
         ]
     return templates.TemplateResponse(
-        "genre_stats.html", {"request": request, "years": years}
+        request, "genre_stats.html", {"years": years}
     )
 
 
@@ -2785,7 +2795,7 @@ async def genre_top_genres(request: Request, limit: int = 20):
         ).fetchall()
     genres = _aggregate_genres(rows, top_n=limit)
     return templates.TemplateResponse(
-        "_genre_list.html", {"request": request, "genres": genres}
+        request, "_genre_list.html", {"genres": genres}
     )
 
 
@@ -2804,7 +2814,7 @@ async def genre_top_genres_year(request: Request, year: str, limit: int = 20):
         ).fetchall()
     genres = _aggregate_genres(rows, top_n=limit)
     return templates.TemplateResponse(
-        "_genre_list.html", {"request": request, "genres": genres}
+        request, "_genre_list.html", {"genres": genres}
     )
 
 
@@ -2869,7 +2879,7 @@ async def discovery_page(request: Request):
     # Reverse so most recent year is first
     ordered = [(y, years_data[y]) for y in sorted(years_data.keys(), reverse=True)]
     return templates.TemplateResponse(
-        "discovery.html", {"request": request, "years": ordered}
+        request, "discovery.html", {"years": ordered}
     )
 
 

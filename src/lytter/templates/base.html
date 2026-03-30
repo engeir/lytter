@@ -28,7 +28,7 @@
         </div>
         <div class="ms-auto">
           <div class="position-relative" style="width: 300px;">
-            <input type="search" id="artist-search" class="form-control" placeholder="Search artists..." autocomplete="off">
+            <input type="search" id="artist-search" class="form-control" placeholder="Search artists, albums, songs..." autocomplete="off">
             <div id="search-results"
                  class="position-absolute w-100 mt-1"
                  style="z-index: 1050;
@@ -68,22 +68,39 @@
             }
 
             searchTimeout = setTimeout(() => {
-                fetch(`/api/search/artists?q=${encodeURIComponent(query)}&limit=10`)
+                fetch(`/api/search/all?q=${encodeURIComponent(query)}&limit=5`)
                     .then(res => res.json())
                     .then(data => {
-                        if (data.results.length === 0) {
-                            searchResults.innerHTML = '<div class="search-no-results">No artists found</div>';
-                        } else {
-                            searchResults.innerHTML = data.results.map(artist => `
-                                <a href="/artist/${encodeURIComponent(artist.artist)}" class="search-result-item">
-                                    <span style="font-weight: 500;">${escapeHtml(artist.artist)}</span>
-                                    <div>
-                                        <span class="badge bg-primary" style="margin-right: 0.5rem;">${artist.plays.toLocaleString()}</span>
-                                        <span style="color: #8b949e; font-size: 0.85rem;">${artist.similarity}%</span>
-                                    </div>
-                                </a>
-                            `).join('');
+                        const sections = [];
+
+                        if (data.artists.length > 0) {
+                            sections.push('<div class="search-section-header">Artists</div>');
+                            sections.push(...data.artists.map(a => `
+                                <a href="/artist/${encodeURIComponent(a.artist)}" class="search-result-item">
+                                    <span style="font-weight: 500;">${escapeHtml(a.artist)}</span>
+                                    <span class="badge bg-primary">${a.plays.toLocaleString()}</span>
+                                </a>`));
                         }
+                        if (data.albums.length > 0) {
+                            sections.push('<div class="search-section-header">Albums</div>');
+                            sections.push(...data.albums.map(a => `
+                                <a href="/album/${encodeURIComponent(a.artist)}/${encodeURIComponent(a.album)}" class="search-result-item">
+                                    <span style="font-weight: 500;">${escapeHtml(a.album)}</span>
+                                    <span style="color: var(--text-secondary); font-size: 0.85rem;">${escapeHtml(a.artist)}</span>
+                                </a>`));
+                        }
+                        if (data.tracks.length > 0) {
+                            sections.push('<div class="search-section-header">Songs</div>');
+                            sections.push(...data.tracks.map(t => `
+                                <a href="/song/${encodeURIComponent(t.artist)}/${encodeURIComponent(t.track)}" class="search-result-item">
+                                    <span style="font-weight: 500;">${escapeHtml(t.track)}</span>
+                                    <span style="color: var(--text-secondary); font-size: 0.85rem;">${escapeHtml(t.artist)}</span>
+                                </a>`));
+                        }
+
+                        searchResults.innerHTML = sections.length
+                            ? sections.join('')
+                            : '<div class="search-no-results">No results found</div>';
                         searchResults.style.display = 'block';
                     })
                     .catch(error => {

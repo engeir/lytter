@@ -1854,6 +1854,59 @@ async def search_artists(q: str = "", limit: int = 10) -> dict:
     return {"results": results[:limit]}
 
 
+@app.get("/api/search/all")
+async def search_all(q: str = "", limit: int = 5) -> dict:
+    """Search artists, albums, and tracks with substring matching.
+
+    Parameters
+    ----------
+    q : str
+        Search query (minimum 2 characters)
+    limit : int
+        Maximum results per category (default: 5)
+
+    Returns
+    -------
+    dict
+        Keys 'artists', 'albums', 'tracks', each a list of matching items.
+    """
+    min_query_length = 2
+    if not q or len(q) < min_query_length:
+        return {"artists": [], "albums": [], "tracks": []}
+
+    q_lower = q.lower()
+    q_norm = normalize_text(q_lower)
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.create_function("NORM", 1, lambda s: normalize_text(s.lower()) if s else "")
+
+        artist_rows = conn.execute(
+            """SELECT artist, COUNT(*) as plays FROM musiclibrary
+               WHERE NORM(artist) LIKE ? GROUP BY artist ORDER BY plays DESC LIMIT ?""",
+            (f"%{q_norm}%", limit),
+        ).fetchall()
+
+        album_rows = conn.execute(
+            """SELECT artist, album, COUNT(*) as plays FROM musiclibrary
+               WHERE album != '' AND NORM(album) LIKE ?
+               GROUP BY artist, album ORDER BY plays DESC LIMIT ?""",
+            (f"%{q_norm}%", limit),
+        ).fetchall()
+
+        track_rows = conn.execute(
+            """SELECT artist, track, COUNT(*) as plays FROM musiclibrary
+               WHERE NORM(track) LIKE ?
+               GROUP BY artist, track ORDER BY plays DESC LIMIT ?""",
+            (f"%{q_norm}%", limit),
+        ).fetchall()
+
+    return {
+        "artists": [{"artist": r[0], "plays": r[1]} for r in artist_rows],
+        "albums": [{"artist": r[0], "album": r[1], "plays": r[2]} for r in album_rows],
+        "tracks": [{"artist": r[0], "track": r[1], "plays": r[2]} for r in track_rows],
+    }
+
+
 @app.get("/yearly", response_class=HTMLResponse)
 async def yearly_stats(request: Request):
     """Yearly statistics page with year selector."""

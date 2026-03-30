@@ -217,6 +217,20 @@ a:hover {
     color: var(--text-secondary);
 }
 
+.search-section-header {
+    padding: 0.4rem 1rem 0.2rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+.search-section-header:first-child {
+    border-top: none;
+}
+
 /* ===== Tabs (for yearly stats) ===== */
 .nav-tabs {
     border-bottom-color: var(--border-color);

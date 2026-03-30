@@ -77,6 +77,28 @@
       </div>
     </div>
   {% endif %}
+
+  {% if lyrics or not lyrics_fetched %}
+    <div class="row mb-4">
+      <div class="col-12">
+        <details class="card">
+          <summary class="card-body" style="cursor: pointer; list-style: none; user-select: none;">
+            <h5 class="card-title mb-0 d-inline">Lyrics</h5>
+            {% if not lyrics_fetched %}<span class="text-muted small ms-2">Loading…</span>{% endif %}
+          </summary>
+          {% if lyrics %}
+            <div class="card-body pt-0">
+              <pre style="white-space: pre-wrap;
+                          font-family: inherit;
+                          margin: 0;
+                          color: var(--text-primary);
+                          background-color: transparent">{{ lyrics }}</pre>
+            </div>
+          {% endif %}
+        </details>
+      </div>
+    </div>
+  {% endif %}
 {% endblock %}
 
 {% block scripts %}

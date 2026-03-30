@@ -18,6 +18,11 @@ from dotenv import load_dotenv
 from rapidfuzz import fuzz, process
 
 try:
+    import lyricsgenius as _lyricsgenius
+except ImportError:
+    _lyricsgenius = None
+
+try:
     import pandas as pd
     import plotly.express as px
     from fastapi import BackgroundTasks, FastAPI, Query, Request
@@ -70,6 +75,7 @@ DEEZER_SEARCH_URL = "https://api.deezer.com/search"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_SEARCH_URL = "https://api.spotify.com/v1/search"
 DURATION_RETRY_DAYS = 30
+LYRICS_RETRY_DAYS = 90
 
 _spotify_token: dict[str, object] = {}  # keys: access_token, expires_at
 
@@ -132,6 +138,15 @@ def init_db():
                 artist TEXT NOT NULL,
                 track TEXT NOT NULL,
                 duration_ms INTEGER,
+                fetched_at INTEGER NOT NULL,
+                PRIMARY KEY (artist, track)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS lyrics (
+                artist TEXT NOT NULL,
+                track TEXT NOT NULL,
+                lyrics TEXT,
                 fetched_at INTEGER NOT NULL,
                 PRIMARY KEY (artist, track)
             )
@@ -428,6 +443,38 @@ def fetch_and_cache_durations(tracks: list[tuple[str, str, str | None]]) -> None
             )
             conn.commit()
             _time.sleep(1.1)  # MusicBrainz rate limit: 1 req/sec
+
+
+def fetch_and_cache_lyrics(artist: str, track: str) -> None:
+    """Fetch lyrics for a track from Genius and cache in the database.
+
+    Requires GENIUS_TOKEN environment variable. Stores NULL if not found so
+    the lookup is not retried until LYRICS_RETRY_DAYS have passed.
+    """
+    genius_token = os.environ.get("GENIUS_TOKEN")
+    if not genius_token or _lyricsgenius is None:
+        return
+
+    genius = _lyricsgenius.Genius(
+        genius_token,
+        verbose=False,
+        remove_section_headers=False,
+        skip_non_songs=True,
+    )
+    lyrics: str | None = None
+    try:
+        song = genius.search_song(track, artist)
+        if song and song.lyrics:
+            # lyricsgenius appends "X Embed" at the end — strip it
+            raw = re.sub(r"\d*\s*Embed$", "", song.lyrics.strip()).strip()
+            lyrics = raw or None
+    except Exception:
+        pass
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO lyrics (artist, track, lyrics, fetched_at) VALUES (?, ?, ?, ?)",
+            (artist, track, lyrics, int(_time.time())),
+        )
 
 
 class GetScrobbles:
@@ -1269,6 +1316,32 @@ async def song_stats(
                     fetch_and_cache_durations, [(artist_name, track_name, mbid)]
                 )
 
+        # Lyrics: check cache, schedule background fetch if missing/stale
+        lyrics_row = cursor.execute(
+            "SELECT lyrics, fetched_at FROM lyrics WHERE artist = ? AND track = ?",
+            (artist_name, track_name),
+        ).fetchone()
+        if lyrics_row is None:
+            if os.environ.get("GENIUS_TOKEN"):
+                background_tasks.add_task(fetch_and_cache_lyrics, artist_name, track_name)
+            lyrics = None
+            lyrics_fetched = False
+        elif lyrics_row[0] is not None:
+            lyrics = lyrics_row[0]
+            lyrics_fetched = True
+        else:
+            # Previously attempted but not found — retry if stale
+            lyrics = None
+            lyrics_fetched = True
+            if _time.time() - lyrics_row[1] > LYRICS_RETRY_DAYS * 86_400:
+                cursor.execute(
+                    "DELETE FROM lyrics WHERE artist = ? AND track = ?",
+                    (artist_name, track_name),
+                )
+                if os.environ.get("GENIUS_TOKEN"):
+                    background_tasks.add_task(fetch_and_cache_lyrics, artist_name, track_name)
+                lyrics_fetched = False
+
         # Find similar recordings (variants of the same performance)
         current_duration_ms = duration_row[0] if duration_row and duration_row[0] else None
         track_duration = format_track_duration(current_duration_ms) if current_duration_ms else None
@@ -1329,6 +1402,8 @@ async def song_stats(
             "similar_tracks": similar_tracks,
             "combined_plays": combined_plays,
             "combined_time": combined_time,
+            "lyrics": lyrics,
+            "lyrics_fetched": lyrics_fetched,
         },
     )
 

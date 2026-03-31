@@ -11,14 +11,14 @@
 {% endmacro %}
 
 {# Bar Chart Item - Used in top artists, songs, albums lists #}
-{% macro
-  bar_chart_item(label, value, max_value, url) %}
-  <div class="bar-chart-item">
+{% macro bar_chart_item(label, value, max_value, url, index=None) %}
+  <div class="bar-chart-item{% if index is none %} bar-chart-item--no-index{% endif %}">
+    {% if index is not none %}<span class="bar-chart-index">{{ index }}</span>{% endif %}
     <a href="{{ url }}" class="bar-chart-item-link">{{ label }}</a>
-    <div class="bar-chart-visual">
-      <div class="bar-chart-bar" style="width: {{ (value / max_value * 100) if max_value > 0 else 0 }}%"></div>
-      <span class="bar-chart-value">{{ "{:,}".format(value) }}</span>
+    <div class="bar-chart-track">
+      <div class="bar-chart-fill" style="width: {{ (value / max_value * 100) if max_value > 0 else 0 }}%"></div>
     </div>
+    <span class="bar-chart-value">{{ "{:,}".format(value) }}</span>
   </div>
 {% endmacro %}
 
@@ -108,34 +108,38 @@
 {% endmacro %}
 
 {# Yearly Top Item - Used in yearly stats #}
-{% macro
-  yearly_top_item(index, primary_text, secondary_text, plays, primary_url, secondary_url)
-  %}
-  <div class="d-flex justify-content-between align-items-center py-2"
-       style="border-bottom: 1px solid rgba(240, 246, 252, 0.1)">
-    <div class="flex-grow-1" style="min-width: 0">
-      <a href="{{ primary_url }}"
-         class="text-decoration-none"
-         style="color: var(--text-primary);
-                font-weight: 500;
-                font-size: 0.9rem;
-                display: block;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap">{{ index }}. {{ primary_text }}</a>
-      {% if secondary_text %}
-        <a href="{{ secondary_url }}"
+{% macro yearly_top_item(index, primary_text, secondary_text, plays, primary_url, secondary_url, bar_pct=None) %}
+  <div class="yearly-top-item">
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="flex-grow-1" style="min-width: 0">
+        <a href="{{ primary_url }}"
            class="text-decoration-none"
-           style="color: var(--text-secondary);
-                  font-size: 0.8rem;
+           style="color: var(--text-primary);
+                  font-weight: 500;
+                  font-size: 0.9rem;
                   display: block;
                   overflow: hidden;
                   text-overflow: ellipsis;
-                  white-space: nowrap">{{ secondary_text }}</a>
-      {% endif %}
+                  white-space: nowrap">{{ index }}. {{ primary_text }}</a>
+        {% if secondary_text %}
+          <a href="{{ secondary_url }}"
+             class="text-decoration-none"
+             style="color: var(--text-secondary);
+                    font-size: 0.8rem;
+                    display: block;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap">{{ secondary_text }}</a>
+        {% endif %}
+      </div>
+      <div class="ms-2" style="min-width: 60px; text-align: right">
+        <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem">{{ plays }}</span>
+      </div>
     </div>
-    <div class="ms-2" style="min-width: 60px; text-align: right">
-      <span style="color: var(--accent-blue); font-weight: 600; font-size: 0.9rem">{{ plays }}</span>
-    </div>
+    {% if bar_pct is not none %}
+      <div class="yearly-bar-track">
+        <div class="yearly-bar-fill" style="width: {{ bar_pct }}%"></div>
+      </div>
+    {% endif %}
   </div>
 {% endmacro %}

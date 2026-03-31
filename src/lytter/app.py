@@ -2230,6 +2230,7 @@ async def duration_top_songs(request: Request, limit: int = 20):
                 "track": row[1],
                 "plays": row[2],
                 "time": format_listening_time(row[3]),
+                "raw_ms": row[3],
             }
             for row in cursor.fetchall()
         ]
@@ -2263,6 +2264,7 @@ async def duration_top_albums(request: Request, limit: int = 20):
                 "album": row[1],
                 "plays": row[2],
                 "time": format_listening_time(row[3]),
+                "raw_ms": row[3],
             }
             for row in cursor.fetchall()
         ]
@@ -2295,6 +2297,7 @@ async def duration_top_artists(request: Request, limit: int = 20):
                 "artist": row[0],
                 "plays": row[1],
                 "time": format_listening_time(row[2]),
+                "raw_ms": row[2],
             }
             for row in cursor.fetchall()
         ]

@@ -1,12 +1,12 @@
 {% if genres %}
   {% set max_score = genres[0].score %}
   {% for g in genres %}
-    <div class="bar-chart-item">
-      <span class="bar-chart-item-link">{{ g.genre }}</span>
-      <div class="bar-chart-visual">
-        <div class="bar-chart-bar" style="width: {{ ((g.score / max_score) * 100)|round }}%;"></div>
-        <span class="bar-chart-value">{{ g.score|int }}</span>
+    <div class="bar-chart-item bar-chart-item--no-index">
+      <span class="bar-chart-item-link">{{ loop.index }}. {{ g.genre }}</span>
+      <div class="bar-chart-track">
+        <div class="bar-chart-fill" style="width: {{ ((g.score / max_score) * 100)|round }}%;"></div>
       </div>
+      <span class="bar-chart-value">{{ g.score|int }}</span>
     </div>
   {% endfor %}
 {% else %}

@@ -1,28 +1,29 @@
 {# HTML Fragment for Duration Top Items - Loaded via HTMX #}
 {% from 'macros.html' import yearly_top_item %}
 {% if items %}
-
+  {% set max_raw = items[0].raw_ms %}
   {% for item in items %}
-
+    {% set bar_pct = ((item.raw_ms / max_raw * 100) | round(1)) if max_raw > 0 else 0 %}
     {% if item_type == 'songs' %}
       {{ yearly_top_item(index=loop.index, primary_text=item.track,
             secondary_text=item.artist, plays=item.time,
             primary_url='/song/' + (item.artist|urlencode) + '/' + (item.track|urlencode),
-      secondary_url='/artist/' + (item.artist|urlencode)) }}
+      secondary_url='/artist/' + (item.artist|urlencode),
+      bar_pct=bar_pct) }}
     {% elif item_type == 'albums' %}
       {{ yearly_top_item(index=loop.index, primary_text=item.album,
             secondary_text=item.artist, plays=item.time,
             primary_url='/album/' + (item.artist|urlencode) + '/' + (item.album|urlencode),
-      secondary_url='/artist/' + (item.artist|urlencode)) }}
+      secondary_url='/artist/' + (item.artist|urlencode),
+      bar_pct=bar_pct) }}
     {% elif item_type == 'artists' %}
       {{ yearly_top_item(index=loop.index, primary_text=item.artist,
             secondary_text=None, plays=item.time,
             primary_url='/artist/' + (item.artist|urlencode) ,
-      secondary_url=None) }}
+      secondary_url=None,
+      bar_pct=bar_pct) }}
     {% endif %}
-
   {% endfor %}
-
 {% else %}
   <p class="text-muted text-center">No data available</p>
 {% endif %}

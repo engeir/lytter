@@ -36,6 +36,7 @@ lytter-background = "lytter.background_updater:main"
 lytter-cron = "lytter.cron_updater:main"
 lytter-duration = "lytter.duration_updater:main"
 lytter-gaps = "lytter.gap_checker:main"
+lytter-meta = "lytter.meta_updater:main"
 lytter-status = "lytter.db_status:main"
 lytter-update = "lytter.update_db:main"
 

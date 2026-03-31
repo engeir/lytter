@@ -132,14 +132,15 @@
         .then(response => response.json())
         .then(data => {
             const maxPlays = data.songs.length > 0 ? data.songs[0].plays : 1;
-            const list = data.songs.map(song => {
+            const list = data.songs.map((song, i) => {
                 const barWidth = (song.plays / maxPlays) * 100;
                 return `<div class="bar-chart-item">
+                    <span class="bar-chart-index">${i + 1}</span>
                     <a href="/song/${encodeURIComponent(artistName)}/${encodeURIComponent(song.track)}" class="bar-chart-item-link">${song.track}</a>
-                    <div class="bar-chart-visual">
-                        <div class="bar-chart-bar" style="width: ${barWidth}%;"></div>
-                        <span class="bar-chart-value">${song.plays.toLocaleString()}</span>
+                    <div class="bar-chart-track">
+                        <div class="bar-chart-fill" style="width: ${barWidth}%;"></div>
                     </div>
+                    <span class="bar-chart-value">${song.plays.toLocaleString()}</span>
                 </div>`;
             }).join('');
             document.getElementById('top-songs-list').innerHTML = list;
@@ -153,14 +154,15 @@
         .then(response => response.json())
         .then(data => {
             const maxPlays = data.albums.length > 0 ? data.albums[0].plays : 1;
-            const list = data.albums.map(album => {
+            const list = data.albums.map((album, i) => {
                 const barWidth = (album.plays / maxPlays) * 100;
                 return `<div class="bar-chart-item">
+                    <span class="bar-chart-index">${i + 1}</span>
                     <a href="/album/${encodeURIComponent(artistName)}/${encodeURIComponent(album.album)}" class="bar-chart-item-link">${album.album}</a>
-                    <div class="bar-chart-visual">
-                        <div class="bar-chart-bar" style="width: ${barWidth}%;"></div>
-                        <span class="bar-chart-value">${album.plays.toLocaleString()}</span>
+                    <div class="bar-chart-track">
+                        <div class="bar-chart-fill" style="width: ${barWidth}%;"></div>
                     </div>
+                    <span class="bar-chart-value">${album.plays.toLocaleString()}</span>
                 </div>`;
             }).join('');
             document.getElementById('top-albums-list').innerHTML = list;

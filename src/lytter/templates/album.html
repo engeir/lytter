@@ -86,14 +86,15 @@
         .then(response => response.json())
         .then(data => {
             const maxPlays = data.tracks.length > 0 ? data.tracks[0].plays : 1;
-            const list = data.tracks.slice(0, 50).map(song => {
+            const list = data.tracks.slice(0, 50).map((song, i) => {
                 const barWidth = (song.plays / maxPlays) * 100;
                 return `<div class="bar-chart-item">
+                    <span class="bar-chart-index">${i + 1}</span>
                     <a href="/song/${encodeURIComponent(artistName)}/${encodeURIComponent(song.track)}" class="bar-chart-item-link">${song.track}</a>
-                    <div class="bar-chart-visual">
-                        <div class="bar-chart-bar" style="width: ${barWidth}%;"></div>
-                        <span class="bar-chart-value">${song.plays.toLocaleString()}</span>
+                    <div class="bar-chart-track">
+                        <div class="bar-chart-fill" style="width: ${barWidth}%;"></div>
                     </div>
+                    <span class="bar-chart-value">${song.plays.toLocaleString()}</span>
                 </div>`;
             }).join('');
             document.getElementById('tracks-list').innerHTML = list;

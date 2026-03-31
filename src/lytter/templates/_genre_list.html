@@ -2,7 +2,7 @@
   {% set max_score = genres[0].score %}
   {% for g in genres %}
     <div class="bar-chart-item bar-chart-item--no-index">
-      <span class="bar-chart-item-link">{{ loop.index }}. {{ g.genre }}</span>
+      <a href="/genre/{{ g.genre|urlencode }}" class="bar-chart-item-link">{{ loop.index }}. {{ g.genre }}</a>
       <div class="bar-chart-track">
         <div class="bar-chart-fill" style="width: {{ ((g.score / max_score) * 100)|round }}%;"></div>
       </div>

@@ -25,7 +25,7 @@ except ImportError:
 try:
     import pandas as pd
     import plotly.express as px
-    from fastapi import BackgroundTasks, FastAPI, Query, Request
+    from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
     from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
     from fastapi.templating import Jinja2Templates
@@ -2861,6 +2861,85 @@ async def genre_evolution():
         series.append({"genre": genre, "data": pct})
 
     return {"years": years, "series": series}
+
+
+@app.get("/genre/{genre_name}", response_class=HTMLResponse)
+async def genre_detail(request: Request, genre_name: str):
+    """Detail page for a specific genre."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            "SELECT artist, tags FROM artist_genres WHERE tags != '[]'"
+        ).fetchall()
+
+    # Find artists tagged with this genre and their tag weight
+    genre_weights: dict[str, int] = {}
+    for artist, tags_json in rows:
+        for entry in json.loads(tags_json):
+            if str(entry["tag"]).lower() == genre_name.lower():
+                genre_weights[artist] = int(entry.get("weight", 1))
+                break
+
+    if not genre_weights:
+        raise HTTPException(status_code=404, detail=f"Genre '{genre_name}' not found")
+
+    artist_list = list(genre_weights.keys())
+    placeholders = ",".join("?" * len(artist_list))
+
+    with sqlite3.connect(DB_NAME) as conn:
+        play_rows = conn.execute(
+            f"SELECT artist, COUNT(*) as plays FROM musiclibrary WHERE artist IN ({placeholders}) GROUP BY artist",
+            artist_list,
+        ).fetchall()
+        play_counts = {r[0]: r[1] for r in play_rows}
+
+        top_tracks_rows = conn.execute(
+            f"""SELECT artist, track, COUNT(*) as plays
+                FROM musiclibrary WHERE artist IN ({placeholders})
+                GROUP BY artist, track ORDER BY plays DESC LIMIT 20""",
+            artist_list,
+        ).fetchall()
+
+        top_albums_rows = conn.execute(
+            f"""SELECT artist, album, COUNT(*) as plays
+                FROM musiclibrary WHERE artist IN ({placeholders}) AND album != ''
+                GROUP BY artist, album ORDER BY plays DESC LIMIT 20""",
+            artist_list,
+        ).fetchall()
+
+        monthly_rows = conn.execute(
+            f"""SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month, COUNT(*) as plays
+                FROM musiclibrary WHERE artist IN ({placeholders})
+                GROUP BY month ORDER BY month""",
+            artist_list,
+        ).fetchall()
+
+    top_artists = sorted(
+        [
+            {
+                "artist": a,
+                "plays": play_counts.get(a, 0),
+                "weighted": round(play_counts.get(a, 0) * genre_weights[a] / 100),
+            }
+            for a in genre_weights
+            if play_counts.get(a, 0) > 0
+        ],
+        key=lambda x: x["weighted"],
+        reverse=True,
+    )[:20]
+
+    return templates.TemplateResponse(
+        request,
+        "genre.html",
+        {
+            "genre": genre_name,
+            "total_plays": sum(play_counts.values()),
+            "total_artists": len(top_artists),
+            "top_artists": top_artists,
+            "top_tracks": [{"artist": r[0], "track": r[1], "plays": r[2]} for r in top_tracks_rows],
+            "top_albums": [{"artist": r[0], "album": r[1], "plays": r[2]} for r in top_albums_rows],
+            "monthly": [{"month": r[0], "plays": r[1]} for r in monthly_rows],
+        },
+    )
 
 
 @app.get("/discovery", response_class=HTMLResponse)

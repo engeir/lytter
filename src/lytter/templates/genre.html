@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from 'macros.html' import stat_card, bar_chart_item, yearly_top_item %}
+
+{% block title %}{{ genre | title }} - Genre Stats{% endblock %}
+
+{% block content %}
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item">
+        <a href="/genre-stats">Genre Stats</a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">{{ genre | title }}</li>
+    </ol>
+  </nav>
+
+  <h1 class="mb-4">{{ genre | title }}</h1>
+
+  <div class="row mb-4">
+    <div class="col-md-3">{{ stat_card("Total Plays", total_plays) }}</div>
+    <div class="col-md-3">{{ stat_card("Artists", total_artists) }}</div>
+  </div>
+
+  {% if monthly %}
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Listening Over Time</h5>
+            <div id="monthly-chart" style="min-height: 250px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row mb-4">
+    <div class="col-md-4 mb-3 mb-md-0">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">Top Artists</h5>
+          {% if top_artists %}
+            {% set max_w = top_artists[0].weighted %}
+            {% for item in top_artists %}
+              {{ bar_chart_item(label=item.artist, value=item.weighted, max_value=max_w,
+                            url='/artist/' + (item.artist|urlencode) , index=loop.index) }}
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">No data</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4 mb-3 mb-md-0">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">Top Tracks</h5>
+          {% if top_tracks %}
+            {% set max_p = top_tracks[0].plays %}
+            {% for item in top_tracks %}
+              {{ yearly_top_item(index=loop.index, primary_text=item.track,
+                            secondary_text=item.artist, plays=item.plays,
+                            primary_url='/song/' + (item.artist|urlencode) + '/' + (item.track|urlencode),
+              secondary_url='/artist/' + (item.artist|urlencode),
+              bar_pct=((item.plays / max_p * 100)|round(1))) }}
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">No data</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">Top Albums</h5>
+          {% if top_albums %}
+            {% set max_p = top_albums[0].plays %}
+            {% for item in top_albums %}
+              {{ yearly_top_item(index=loop.index, primary_text=item.album,
+                            secondary_text=item.artist, plays=item.plays,
+                            primary_url='/album/' + (item.artist|urlencode) + '/' + (item.album|urlencode),
+              secondary_url='/artist/' + (item.artist|urlencode),
+              bar_pct=((item.plays / max_p * 100)|round(1))) }}
+            {% endfor %}
+          {% else %}
+            <p class="text-muted">No data</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {% if monthly %}
+    <script>
+      Plotly.newPlot('monthly-chart', [{
+        x: {{ monthly | map(attribute='month') | list | tojson }},
+        y: {{ monthly | map(attribute='plays') | list | tojson }},
+        type: 'bar',
+        marker: { color: '#388bfd', opacity: 0.8 },
+        hovertemplate: '%{x}: %{y} plays<extra></extra>'
+      }], {
+        paper_bgcolor: '#161b22',
+        plot_bgcolor: '#161b22',
+        font: { color: '#f0f6fc' },
+        xaxis: { gridcolor: '#30363d', color: '#f0f6fc' },
+        yaxis: { gridcolor: '#30363d', color: '#f0f6fc' },
+        margin: { t: 10, l: 50, r: 20, b: 40 },
+      }, { responsive: true });
+    </script>
+  {% endif %}
+{% endblock %}

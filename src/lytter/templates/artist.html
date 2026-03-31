@@ -41,7 +41,7 @@
         {% elif genres %}
           {% set max_weight = genres[0].weight %}
           {% for g in genres %}
-            <a href="/genre-stats"
+            <a href="/genre/{{ g.tag|urlencode }}"
                class="badge me-1 mb-1 text-decoration-none"
                style="background-color: rgba(56, 139, 253, {{ [0.3 + (g.weight / max_weight) * 0.7, 1.0]|min }});
                       font-size: 0.8rem">{{ g.tag }}</a>

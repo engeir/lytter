@@ -69,6 +69,9 @@ app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="stat
 
 # Constants
 CONSECUTIVE_SCROBBLES_THRESHOLD = 50
+# Minimum valid scrobble timestamp: 2000-01-01 00:00:00 UTC
+# Last.fm launched in 2002; anything before 2000 is a corrupt epoch artifact.
+MINIMUM_VALID_TIMESTAMP = 946684800
 MUSICBRAINZ_USER_AGENT = "lytter/1.0 (https://github.com/engeir/lytter)"
 MUSICBRAINZ_SEARCH_URL = "https://musicbrainz.org/ws/2/recording/"
 DEEZER_SEARCH_URL = "https://api.deezer.com/search"
@@ -795,6 +798,13 @@ class GetScrobbles:
                         continue
 
                     scrobble_timestamp = int(scrobble["date"]["uts"])
+
+                    if scrobble_timestamp < MINIMUM_VALID_TIMESTAMP:
+                        print(
+                            f"\nSkipping scrobble with corrupt timestamp {scrobble_timestamp} "
+                            f"({scrobble['artist']['#text']} - {scrobble['name']})"
+                        )
+                        continue
 
                     # Check if this exact scrobble already exists (always check, don't assume based on timestamp)
                     cursor.execute(

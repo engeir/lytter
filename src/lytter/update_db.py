@@ -2,9 +2,22 @@
 """Command-line utility to update the Last.fm database."""
 
 import argparse
+import sqlite3
 import sys
 
-from lytter.app import GetScrobbles, init_db
+from lytter.app import DB_NAME, MINIMUM_VALID_TIMESTAMP, GetScrobbles, init_db
+
+
+def remove_corrupt_timestamps() -> int:
+    """Delete scrobbles with timestamps before 2000-01-01 (corrupt epoch artifacts)."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM musiclibrary WHERE timestamp < ?",
+            (MINIMUM_VALID_TIMESTAMP,),
+        )
+        conn.commit()
+        return cursor.rowcount
 
 
 def main():
@@ -22,6 +35,11 @@ def main():
         help="Limit number of pages to fetch (0 = no limit)",
     )
     parser.add_argument(
+        "--clean-corrupt",
+        action="store_true",
+        help="Remove scrobbles with corrupt timestamps (before 2000-01-01)",
+    )
+    parser.add_argument(
         "--thorough",
         action="store_true",
         help="Thorough incremental update (checks more pages, slower but more reliable)",
@@ -31,6 +49,11 @@ def main():
 
     # Initialize database if it doesn't exist
     init_db()
+
+    if args.clean_corrupt:
+        deleted = remove_corrupt_timestamps()
+        print(f"Removed {deleted} scrobble(s) with corrupt timestamps (pre-2000).")
+        return
 
     # Create downloader
     downloader = GetScrobbles()

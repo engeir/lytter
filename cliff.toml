@@ -104,4 +104,4 @@ sort_commits = "newest"
 
 [remote.github]
 owner = "engeir"
-repo  = "lytter"
+repo = "lytter"

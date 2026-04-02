@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Last.fm Listening History: Map of Artists I Have Listened To</title>
 
     <link rel="stylesheet" href="http://geoffboeing.com/share/projects/leaflet/0.7.7/leaflet.css" />
@@ -9,32 +9,33 @@
     <script src='lastfm-dataset.js'></script>
 
     <style type='text/css'>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Helvetica, sans-serif;
+        }
 
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: Helvetica, sans-serif;
-    }
-    #map {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 100%;
-    }
-    .popupHeader {
-      font-weight: bold;
-      color: gray;
-      font-size: 110%;
-    }
-    .popupDetails {
-      font-weight: normal;
-      color: gray;
-    }
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
 
+        .popupHeader {
+            font-weight: bold;
+            color: gray;
+            font-size: 110%;
+        }
+
+        .popupDetails {
+            font-weight: normal;
+            color: gray;
+        }
     </style>
-</head>
+  </head>
 
-<body>
+  <body>
 
     <div id="map"></div>
 
@@ -78,5 +79,5 @@
     map.setView(initialMapCenter, initialZoomLevel);
 
     </script>
-</body>
+  </body>
 </html>

@@ -1,18 +1,24 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in
+this repository.
 
 For any file search or grep in the current git indexed directory use fff tools.
 
 ## Project Overview
 
-**Lytter** is a Last.fm statistics web application built with FastAPI. It fetches and displays listening history, now-playing information, and various music statistics from Last.fm API. The app uses SQLite for database management and stores scrobbles (listening history) with incremental updates.
+**Lytter** is a Last.fm statistics web application built with FastAPI. It fetches and
+displays listening history, now-playing information, and various music statistics from
+Last.fm API. The app uses SQLite for database management and stores scrobbles (listening
+history) with incremental updates.
 
 ## Essential Commands
 
-This project uses [mise](https://mise.jdx.dev/) as a task runner. Use `mise tasks` to see all available tasks.
+This project uses [mise](https://mise.jdx.dev/) as a task runner. Use `mise tasks` to
+see all available tasks.
 
 ### Development
+
 ```bash
 # Quick commands via mise (recommended)
 mise run r              # Run the development server (alias for 'run')
@@ -25,6 +31,7 @@ uv run lytter-status    # Check database status
 ```
 
 ### Code Quality
+
 ```bash
 # Run type checking
 uv run mypy src/
@@ -40,6 +47,7 @@ uv run pre-commit run --all-files
 ### Docker
 
 **Quick commands via mise (recommended):**
+
 ```bash
 mise run db             # Build image
 mise run dt             # Tag for registry
@@ -51,6 +59,7 @@ mise run dl             # Follow logs
 ```
 
 **Or use docker/compose directly:**
+
 ```bash
 # Local testing
 docker compose up --build          # Build and run
@@ -63,6 +72,7 @@ docker push ghcr.io/engeir/lytter:latest
 ```
 
 **Deploy to VPS:**
+
 ```bash
 # On your VPS
 docker pull ghcr.io/engeir/lytter:latest
@@ -89,6 +99,7 @@ crontab -e
 - **Structure**: Modern src/ layout with proper packaging
 
 ### Project Structure
+
 ```
 src/lytter/
   __init__.py           - Package initialization
@@ -105,17 +116,20 @@ src/lytter/
 ### Key Components
 
 **Main Application** (`src/lytter/app.py`):
+
 - FastAPI app with routes for displaying stats
 - `GetScrobbles` class: Fetches scrobbles from Last.fm API
 - `CurrentStats` class: Generates Plotly visualizations
 - Database helper functions: `get_db_connection()`, `init_db()`
 
 **Update Scripts**:
+
 - `update_db.py`: Interactive CLI with `--full`, `--thorough`, `--pages` options
 - `cron_updater.py`: Silent, cron-friendly incremental updates
 - `background_updater.py`: APScheduler-based continuous updater
 
 **Database**:
+
 - SQLite database at `music.db`
 - Schema: `musiclibrary` table (artist, album, track, timestamps, MusicBrainz IDs)
 - Incremental updates: Stops when encountering 50 consecutive existing scrobbles
@@ -133,6 +147,7 @@ src/lytter/
 ## Environment Variables
 
 Required in `.env` file (see `.env.example`):
+
 ```bash
 API_KEY=your_lastfm_api_key
 API_SECRET=your_lastfm_api_secret
@@ -145,17 +160,21 @@ UPDATE_PASSWORD=password_for_db_updates
 ## Development Notes
 
 ### Code Style
+
 - Docstrings follow NumPy convention (configured in pyproject.toml)
 - Type hints encouraged but not strictly enforced
 - Ruff handles linting with pydocstyle (D), pyflakes (F), pycodestyle (E), pylint (PL)
 
 ### Database Updates
+
 The `GetScrobbles` class implements smart incremental updates:
+
 - By default, stops fetching when it encounters 50 consecutive existing scrobbles
 - Use `--full` parameter to force complete refresh
 - Uses `CONSECUTIVE_SCROBBLES_THRESHOLD` constant for the stop threshold
 
 ### Running the Application
+
 ```bash
 # Development (with auto-reload)
 uv run uvicorn lytter.app:app --reload --host 0.0.0.0 --port 8000
@@ -165,4 +184,6 @@ docker run -p 8000:8000 --env-file .env ghcr.io/engeir/lytter:latest
 ```
 
 ### Deployment Pipeline
-GitHub Actions (`.github/workflows/publish.yml`) builds and pushes to `ghcr.io/engeir/lytter` on pushes to the `release` branch.
+
+GitHub Actions (`.github/workflows/publish.yml`) builds and pushes to
+`ghcr.io/engeir/lytter` on pushes to the `release` branch.

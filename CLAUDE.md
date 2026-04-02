@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+For any file search or grep in the current git indexed directory use fff tools.
+
 ## Project Overview
 
 **Lytter** is a Last.fm statistics web application built with FastAPI. It fetches and displays listening history, now-playing information, and various music statistics from Last.fm API. The app uses SQLite for database management and stores scrobbles (listening history) with incremental updates.

@@ -87,6 +87,25 @@
   </div>
 
   <div class="row">
+    <div class="col-lg-6 mb-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">On This Day</h5>
+          <div hx-get="/html/on-this-day" hx-trigger="load">{{ loading_spinner("Loading...") }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Listening Streaks</h5>
+          <div hx-get="/html/streak-history" hx-trigger="load">{{ loading_spinner("Loading...") }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
     <div class="col-12">
       <div class="card">
         <div class="card-body">

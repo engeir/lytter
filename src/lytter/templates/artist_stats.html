@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Artist Stats - Last.fm Stats{% endblock %}
+
+{% block content %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1>Artist Stats</h1>
+      <p class="text-muted">Listening span vs total plays — bubble size = unique tracks. Top 100 artists.</p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Artist Loyalty</h5>
+          <div id="loyalty-chart" style="height: 550px;">
+            <div class="d-flex justify-content-center align-items-center h-100">
+              <p class="text-muted">Loading chart...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    if (typeof Plotly !== 'undefined') {
+      fetch('/charts/artist-loyalty')
+        .then(r => r.json())
+        .then(data => {
+          Plotly.newPlot('loyalty-chart', data.data, data.layout, { responsive: true, displayModeBar: false });
+        })
+        .catch(() => {
+          document.getElementById('loyalty-chart').innerHTML = '<p class="text-muted">Error loading chart</p>';
+        });
+    }
+  </script>
+{% endblock %}

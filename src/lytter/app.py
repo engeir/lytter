@@ -10,6 +10,7 @@ import time as _time
 import unicodedata
 from collections import Counter, OrderedDict
 from pathlib import Path
+from typing import TypedDict
 from urllib.parse import quote
 
 import pylast
@@ -872,39 +873,66 @@ class CurrentStats:
     """Show stats about a given artist."""
 
     def listening_history_db(self, artist: str):
-        """Get the artist listening history as a cumulative line plot."""
+        """Get monthly play counts as a bar + rolling-avg chart."""
         with sqlite3.connect(DB_NAME) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT timestamp FROM musiclibrary WHERE artist = ? ORDER BY timestamp",
+            rows = conn.execute(
+                """SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month,
+                          COUNT(*) as plays
+                   FROM musiclibrary WHERE artist = ?
+                   GROUP BY month ORDER BY month""",
                 (artist,),
-            )
-            timestamps = [row[0] for row in cursor.fetchall()]
+            ).fetchall()
 
-        dates = [datetime.datetime.fromtimestamp(int(ts)) for ts in timestamps]
-        counts = list(range(1, len(dates) + 1))
+        if not rows:
+            return go.Figure().to_dict()
 
-        df = pd.DataFrame({"date": dates, "count": counts})
-        fig = px.line(df, x="date", y="count", title="Listening history")
+        df = pd.DataFrame(rows, columns=["month", "plays"])
+        df["month_dt"] = pd.to_datetime(df["month"])
+        df["rolling3"] = df["plays"].rolling(3, center=True, min_periods=1).mean()
+        months = df["month_dt"].dt.strftime("%Y-%m-%dT%H:%M:%S").tolist()
+
+        max_dt = df["month_dt"].max()
+        initial_start = max_dt - pd.DateOffset(years=3)
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=months, y=df["plays"].tolist(),
+            name="Monthly plays",
+            marker_color="#1f6feb", marker_opacity=0.6,
+            hovertemplate="%{y} plays<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=months, y=df["rolling3"].round(1).tolist(),
+            name="3-month avg", mode="lines",
+            line=dict(color="#f78166", width=2),
+            hovertemplate="%{y:.1f} avg<extra></extra>",
+        ))
         fig.update_layout(
-            title_x=0.5,
-            xaxis_title="Time",
-            yaxis_title="Count",
-            showlegend=True,
-            title_font_family="Open Sans",
-            title_font_size=25,
-            paper_bgcolor="#161b22",
-            plot_bgcolor="#161b22",
+            paper_bgcolor="#161b22", plot_bgcolor="#161b22",
             font=dict(color="#f0f6fc"),
-            xaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
-            yaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
+            legend=dict(bgcolor="#0d1117", bordercolor="#30363d", borderwidth=1),
+            bargap=0.1, hovermode="x unified",
+            margin=dict(t=10),
+            xaxis=dict(
+                gridcolor="#30363d", color="#f0f6fc",
+                range=[initial_start, max_dt],
+                rangeslider=dict(visible=True, bgcolor="#0d1117",
+                                 bordercolor="#30363d", borderwidth=1, thickness=0.3),
+                rangeselector=dict(
+                    buttons=[
+                        dict(count=1, label="1y", step="year", stepmode="backward"),
+                        dict(count=3, label="3y", step="year", stepmode="backward"),
+                        dict(count=5, label="5y", step="year", stepmode="backward"),
+                        dict(step="all", label="All"),
+                    ],
+                    bgcolor="#161b22", activecolor="#238636",
+                    bordercolor="#30363d", borderwidth=1,
+                    font=dict(color="#f0f6fc"),
+                ),
+            ),
+            yaxis=dict(gridcolor="#30363d", color="#f0f6fc", title="Plays"),
         )
-
-        # Convert to plain dict without binary encoding
-        fig_dict = fig.to_dict()
-        fig_dict["data"][0]["x"] = [d.strftime("%Y-%m-%dT%H:%M:%S") for d in dates]
-        fig_dict["data"][0]["y"] = counts
-        return fig_dict
+        return fig.to_dict()
 
     def top_songs(self, artist: str):
         """Get the top songs of an artist as a bar plot."""
@@ -1408,6 +1436,154 @@ async def recent_stats():
         "month_albums": month_albums,
         "month_songs": month_songs,
     }
+
+
+@app.get("/html/on-this-day", response_class=HTMLResponse)
+async def on_this_day():
+    """Artists listened to on today's date in previous years."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            """SELECT strftime('%Y', timestamp, 'unixepoch') as year,
+                      artist, COUNT(*) as plays
+               FROM musiclibrary
+               WHERE strftime('%m-%d', timestamp, 'unixepoch') = strftime('%m-%d', 'now')
+                 AND strftime('%Y', timestamp, 'unixepoch') != strftime('%Y', 'now')
+               GROUP BY year, artist
+               ORDER BY year DESC, plays DESC"""
+        ).fetchall()
+
+    today = datetime.date.today()
+    by_year: dict[str, list[dict[str, object]]] = {}
+    for year, artist, plays in rows:
+        by_year.setdefault(year, []).append({"artist": artist, "plays": plays})
+
+    if not by_year:
+        return HTMLResponse('<p class="text-muted">No data for this day in previous years yet.</p>')
+
+    parts: list[str] = []
+    for year, artists in by_year.items():
+        ago = today.year - int(year)
+        label = f"{ago} year{'s' if ago != 1 else ''} ago"
+        parts.append(f'<div class="mb-2"><span class="text-muted small me-2">{label} ({year})</span>')
+        for entry in artists[:5]:
+            artist = str(entry["artist"])
+            plays = entry["plays"]
+            parts.append(
+                f'<a href="/artist/{quote(artist)}" '
+                f'class="badge text-decoration-none me-1" '
+                f'style="background-color:var(--card-bg);color:var(--text-primary);'
+                f'border:1px solid var(--border-color);font-size:0.8rem;padding:0.3em 0.6em" '
+                f'title="{plays} plays">{artist}'
+                f'<span class="ms-1 text-muted" style="font-size:0.75em">{plays}</span></a>'
+            )
+        parts.append("</div>")
+
+    return HTMLResponse("".join(parts))
+
+
+class _StreakEntry(TypedDict):
+    start: datetime.date
+    end: datetime.date
+    length: int
+
+
+def _streak_history(conn: sqlite3.Connection) -> list[_StreakEntry]:
+    """Return all streaks of 3+ days, sorted by length descending.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open database connection.
+
+    Returns
+    -------
+    list[_StreakEntry]
+        Each entry has keys: start, end, length (int days).
+    """
+    rows = conn.execute(
+        "SELECT DISTINCT DATE(timestamp, 'unixepoch') FROM musiclibrary ORDER BY 1"
+    ).fetchall()
+    if not rows:
+        return []
+    dates = [datetime.date.fromisoformat(r[0]) for r in rows]
+    streaks: list[_StreakEntry] = []
+    start = dates[0]
+    run = 1
+    MIN_STREAK = 3
+    for i in range(1, len(dates)):
+        if (dates[i] - dates[i - 1]).days == 1:
+            run += 1
+        else:
+            if run >= MIN_STREAK:
+                streaks.append({"start": start, "end": dates[i - 1], "length": run})
+            start = dates[i]
+            run = 1
+    if run >= MIN_STREAK:
+        streaks.append({"start": start, "end": dates[-1], "length": run})
+    return sorted(streaks, key=lambda s: s["length"], reverse=True)[:10]
+
+
+@app.get("/html/streak-history", response_class=HTMLResponse)
+async def streak_history_html():
+    """Top 10 longest listening streaks as an HTML visual."""
+    with sqlite3.connect(DB_NAME) as conn:
+        streaks = _streak_history(conn)
+
+    if not streaks:
+        return HTMLResponse('<p class="text-muted">No streak data yet.</p>')
+
+    max_len = streaks[0]["length"]
+    parts: list[str] = ['<div style="font-size:0.85rem">']
+    for s in streaks:
+        length = s["length"]
+        start = s["start"]
+        end = s["end"]
+        pct = round(length / max_len * 100)
+        date_label = f"{start.strftime('%-d %b %Y')} – {end.strftime('%-d %b %Y')}"
+        parts.append(
+            f'<div class="d-flex align-items-center gap-2 mb-2">'
+            f'<div style="flex:1;background:#238636;height:14px;border-radius:3px;'
+            f'width:{pct}%;min-width:4px"></div>'
+            f'<span style="white-space:nowrap;color:#f0f6fc;min-width:5em">'
+            f'<strong>{length}</strong> days</span>'
+            f'<span class="text-muted" style="white-space:nowrap">{date_label}</span>'
+            f"</div>"
+        )
+    parts.append("</div>")
+    return HTMLResponse("".join(parts))
+
+
+@app.get("/html/lost-artists", response_class=HTMLResponse)
+async def lost_artists_html():
+    """Artists with 20+ plays not heard in the last 2 years."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            """SELECT artist, COUNT(*) as plays, MAX(timestamp) as last_ts
+               FROM musiclibrary GROUP BY artist
+               HAVING plays >= 20
+                  AND last_ts < strftime('%s', 'now', '-2 years')
+               ORDER BY plays DESC LIMIT 50"""
+        ).fetchall()
+
+    if not rows:
+        return HTMLResponse('<p class="text-muted">No lost artists found.</p>')
+
+    max_plays = rows[0][1]
+    parts: list[str] = ['<div class="d-flex flex-wrap gap-2">']
+    for artist, plays, last_ts in rows:
+        last_dt = datetime.datetime.fromtimestamp(last_ts)
+        font_size = round(0.5 + math.log(plays + 1) / math.log(max_plays + 1) * 2.0, 2)
+        opacity = min(0.45 + font_size * 0.3, 1.0)
+        parts.append(
+            f'<a href="/artist/{quote(artist)}" class="badge text-decoration-none" '
+            f'style="background-color:var(--card-bg);color:var(--text-primary);'
+            f'border:1px solid var(--border-color);font-size:{font_size}rem;'
+            f'opacity:{opacity};padding:0.4em 0.7em" '
+            f'title="Last heard {last_dt.strftime("%-d %b %Y")} · {plays} plays">'
+            f"{artist}</a>"
+        )
+    parts.append("</div>")
+    return HTMLResponse("".join(parts))
 
 
 @app.get("/html/calendar-heatmap", response_class=HTMLResponse)
@@ -3516,6 +3692,100 @@ async def discovery_page(request: Request):
     return templates.TemplateResponse(
         request, "discovery.html", {"years": ordered}
     )
+
+
+@app.get("/artist-stats", response_class=HTMLResponse)
+async def artist_stats_page(request: Request):
+    """Artist loyalty overview page."""
+    return templates.TemplateResponse(request, "artist_stats.html", {})
+
+
+@app.get("/charts/artist-loyalty")
+async def artist_loyalty_chart():
+    """Scatter: listening span vs total plays for top 100 artists."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            """SELECT artist,
+                      MIN(timestamp) as first_ts,
+                      MAX(timestamp) as last_ts,
+                      COUNT(*) as plays,
+                      COUNT(DISTINCT track) as tracks
+               FROM musiclibrary
+               GROUP BY artist
+               ORDER BY plays DESC
+               LIMIT 100"""
+        ).fetchall()
+
+    artists, spans, plays_list, tracks_list, hover = [], [], [], [], []
+    for artist, first_ts, last_ts, plays, tracks in rows:
+        span = (last_ts - first_ts) / (365.25 * 86400)
+        first_str = datetime.datetime.fromtimestamp(first_ts).strftime("%-d %b %Y")
+        last_str = datetime.datetime.fromtimestamp(last_ts).strftime("%-d %b %Y")
+        artists.append(artist)
+        spans.append(round(span, 2))
+        plays_list.append(plays)
+        tracks_list.append(tracks)
+        hover.append(
+            f"<b>{artist}</b><br>{plays} plays · {tracks} tracks"
+            f"<br>Span: {span:.1f} years<br>{first_str} → {last_str}"
+        )
+
+    MARKER_MIN = 6
+    MARKER_MAX = 28
+    max_tracks = max(tracks_list) if tracks_list else 1
+    sizes = [
+        round(MARKER_MIN + (t / max_tracks) * (MARKER_MAX - MARKER_MIN))
+        for t in tracks_list
+    ]
+
+    fig = go.Figure(
+        go.Scatter(
+            x=spans,
+            y=plays_list,
+            mode="markers",
+            text=hover,
+            hovertemplate="%{text}<extra></extra>",
+            marker=dict(
+                size=sizes,
+                color=plays_list,
+                colorscale=[
+                    [0.0, "#0e4429"],
+                    [0.3, "#1f6feb"],
+                    [0.7, "#58a6ff"],
+                    [1.0, "#cae8ff"],
+                ],
+                showscale=True,
+                colorbar=dict(
+                    title=dict(text="Plays", font=dict(color="#8b949e")),
+                    tickfont=dict(color="#8b949e"),
+                    thickness=12,
+                    bgcolor="#161b22",
+                    bordercolor="#30363d",
+                    borderwidth=1,
+                ),
+                opacity=0.85,
+                line=dict(color="#30363d", width=0.5),
+            ),
+        )
+    )
+    fig.update_layout(
+        paper_bgcolor="#161b22",
+        plot_bgcolor="#161b22",
+        font=dict(color="#f0f6fc"),
+        margin=dict(t=20, l=60, r=80, b=60),
+        xaxis=dict(
+            gridcolor="#30363d", color="#f0f6fc",
+            title="Listening span (years)",
+            zeroline=False,
+        ),
+        yaxis=dict(
+            gridcolor="#30363d", color="#f0f6fc",
+            title="Total plays",
+            zeroline=False,
+        ),
+        hovermode="closest",
+    )
+    return fig.to_dict()
 
 
 def main():

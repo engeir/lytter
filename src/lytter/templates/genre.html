@@ -41,7 +41,7 @@
           {% if top_artists %}
             {% set max_w = top_artists[0].weighted %}
             {% for item in top_artists %}
-              {{ bar_chart_item(label=item.artist, value=item.weighted, max_value=max_w,
+              {{ bar_chart_item(label=item.artist ~ ' (' ~ item.plays ~ ')', value=item.weighted, max_value=max_w,
                             url='/artist/' + (item.artist|urlencode) , index=loop.index) }}
             {% endfor %}
           {% else %}

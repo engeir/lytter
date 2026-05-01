@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros.html' import loading_spinner %}
 
 {% block title %}Discovery Timeline - Last.fm Stats{% endblock %}
 
@@ -7,6 +8,18 @@
     <div class="col-12">
       <h1>Discovery Timeline</h1>
       <p class="text-muted">Artists sorted by when you first listened to them.</p>
+    </div>
+  </div>
+
+  <div class="row mb-5">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Lost Artists</h5>
+          <p class="text-muted small">20+ plays, not heard in over 2 years.</p>
+          <div hx-get="/html/lost-artists" hx-trigger="load">{{ loading_spinner("Loading...") }}</div>
+        </div>
+      </div>
     </div>
   </div>
 

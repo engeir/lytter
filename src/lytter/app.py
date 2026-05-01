@@ -2530,16 +2530,15 @@ async def duration_shortest_songs(request: Request, limit: int = 20, min_plays: 
     )
 
 
-@app.get("/api/duration/avg-over-time")
-async def duration_avg_over_time():
-    """Average song length per month over all time."""
+@app.get("/charts/duration/avg-over-time")
+async def duration_avg_over_time_chart():
+    """Average song length per month as a styled Plotly bar chart."""
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
             SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month,
-                   AVG(td.duration_ms) as avg_ms,
-                   COUNT(*) as plays
+                   AVG(td.duration_ms) as avg_ms
             FROM musiclibrary m
             JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
             WHERE td.duration_ms IS NOT NULL
@@ -2548,9 +2547,128 @@ async def duration_avg_over_time():
         """
         )
         rows = cursor.fetchall()
-    months = [row[0] for row in rows]
-    avg_seconds = [round(row[1] / 1000) for row in rows]
-    return {"months": months, "avg_seconds": avg_seconds}
+
+    df = pd.DataFrame(rows, columns=["month", "avg_ms"])
+    df["avg_seconds"] = (df["avg_ms"] / 1000).round().astype(int)
+    df["month"] = pd.to_datetime(df["month"])
+    df["rolling3"] = df["avg_seconds"].rolling(3, center=True, min_periods=1).mean()
+
+    def fmt_sec(s: float) -> str:
+        """Format seconds as M:SS."""
+        si = int(round(s))
+        return f"{si // 60}:{si % 60:02d}"
+
+    months_str = df["month"].dt.strftime("%Y-%m-%dT%H:%M:%S").tolist()
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Bar(
+            x=months_str,
+            y=df["avg_seconds"].tolist(),
+            name="Avg duration",
+            marker_color="#1f6feb",
+            marker_opacity=0.6,
+            customdata=[fmt_sec(s) for s in df["avg_seconds"]],
+            hovertemplate="%{customdata}<extra></extra>",
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=months_str,
+            y=df["rolling3"].round(1).tolist(),
+            name="3-month avg",
+            mode="lines",
+            line=dict(color="#f78166", width=2),
+            customdata=[fmt_sec(s) for s in df["rolling3"]],
+            hovertemplate="%{customdata}<extra></extra>",
+        )
+    )
+
+    if len(df) > 0:
+        peak_idx = int(df["avg_seconds"].idxmax())
+        peak_val = int(df["avg_seconds"].iloc[peak_idx])
+        fig.add_annotation(
+            x=months_str[peak_idx],
+            y=peak_val,
+            text=f"Peak: {fmt_sec(peak_val)}",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="#f0f6fc",
+            arrowwidth=1.5,
+            ax=0,
+            ay=-36,
+            font=dict(color="#f0f6fc", size=12),
+            bgcolor="#30363d",
+            bordercolor="#58a6ff",
+            borderwidth=1,
+            borderpad=4,
+        )
+        max_date = df["month"].max()
+        initial_start = max_date - pd.DateOffset(years=5)
+        initial_end = max_date
+    else:
+        initial_start = initial_end = None
+
+    # Build M:SS tick labels: one per minute, spanning the actual data range
+    SECONDS_PER_MINUTE = 60
+    if len(df) > 0:
+        tick_min = (int(df["avg_seconds"].min()) // SECONDS_PER_MINUTE) * SECONDS_PER_MINUTE
+        tick_max = ((int(df["avg_seconds"].max()) // SECONDS_PER_MINUTE) + 1) * SECONDS_PER_MINUTE
+    else:
+        tick_min, tick_max = 3 * SECONDS_PER_MINUTE, 5 * SECONDS_PER_MINUTE
+    tick_vals = list(range(tick_min, tick_max + 1, SECONDS_PER_MINUTE))
+    tick_text = [fmt_sec(v) for v in tick_vals]
+
+    fig.update_layout(
+        title="Average Song Length Over Time",
+        paper_bgcolor="#161b22",
+        plot_bgcolor="#161b22",
+        font=dict(color="#f0f6fc"),
+        legend=dict(
+            bgcolor="#0d1117",
+            bordercolor="#30363d",
+            borderwidth=1,
+            font=dict(color="#f0f6fc"),
+        ),
+        bargap=0.1,
+        hovermode="x unified",
+        xaxis=dict(
+            gridcolor="#30363d",
+            color="#f0f6fc",
+            range=[initial_start, initial_end] if initial_start else None,
+            rangeslider=dict(
+                visible=True,
+                bgcolor="#0d1117",
+                bordercolor="#30363d",
+                borderwidth=1,
+                thickness=0.25,
+            ),
+            rangeselector=dict(
+                buttons=[
+                    dict(count=1, label="1y", step="year", stepmode="backward"),
+                    dict(count=2, label="2y", step="year", stepmode="backward"),
+                    dict(count=5, label="5y", step="year", stepmode="backward"),
+                    dict(step="all", label="All"),
+                ],
+                bgcolor="#161b22",
+                activecolor="#238636",
+                bordercolor="#30363d",
+                borderwidth=1,
+                font=dict(color="#f0f6fc"),
+            ),
+        ),
+        yaxis=dict(
+            gridcolor="#30363d",
+            color="#f0f6fc",
+            title="Duration",
+            tickvals=tick_vals,
+            ticktext=tick_text,
+        ),
+    )
+
+    return fig.to_dict()
 
 
 @app.get("/api/duration/histogram")

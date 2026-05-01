@@ -25,6 +25,7 @@ except ImportError:
 try:
     import pandas as pd
     import plotly.express as px
+    import plotly.graph_objects as go
     from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
     from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
@@ -1201,28 +1202,79 @@ async def listening_timeline():
 
     df = pd.DataFrame(result, columns=["date", "plays"])
     df["date"] = pd.to_datetime(df["date"])
+    df["rolling7"] = df["plays"].rolling(7, center=True, min_periods=1).mean()
 
-    fig = px.line(
-        df, x="date", y="plays", title="Daily Listening Activity (Last 365 Days)"
+    dates = df["date"].dt.strftime("%Y-%m-%dT%H:%M:%S").tolist()
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Bar(
+            x=dates,
+            y=df["plays"].tolist(),
+            name="Daily plays",
+            marker_color="#1f6feb",
+            marker_opacity=0.6,
+            hovertemplate="%{y} scrobbles<extra></extra>",
+        )
     )
+
+    fig.add_trace(
+        go.Scatter(
+            x=dates,
+            y=df["rolling7"].round(1).tolist(),
+            name="7-day avg",
+            mode="lines",
+            line=dict(color="#f78166", width=2),
+            hovertemplate="%{y} avg<extra></extra>",
+        )
+    )
+
+    if len(df) > 0:
+        peak_idx = int(df["plays"].idxmax())
+        peak_date = dates[peak_idx]
+        peak_val = int(df["plays"].iloc[peak_idx])
+        fig.add_annotation(
+            x=peak_date,
+            y=peak_val,
+            text=f"Peak: {peak_val}",
+            showarrow=True,
+            arrowhead=2,
+            arrowcolor="#f0f6fc",
+            arrowwidth=1.5,
+            ax=0,
+            ay=-36,
+            font=dict(color="#f0f6fc", size=12),
+            bgcolor="#30363d",
+            bordercolor="#58a6ff",
+            borderwidth=1,
+            borderpad=4,
+        )
 
     # Calculate initial view range (last 30 days)
     if len(df) > 0:
         max_date = df["date"].max()
         min_date = df["date"].min()
         initial_end = max_date
-        initial_start = max_date - pd.Timedelta(days=30)
-        # Make sure initial_start is not before the min_date
+        initial_start = max_date - pd.Timedelta(days=90)
         initial_start = max(initial_start, min_date)
     else:
         initial_start = initial_end = None
 
     fig.update_layout(
+        title="Daily Listening Activity (Last 365 Days)",
         xaxis_title="Date",
         yaxis_title="Number of Scrobbles",
         paper_bgcolor="#161b22",
         plot_bgcolor="#161b22",
         font=dict(color="#f0f6fc"),
+        legend=dict(
+            bgcolor="#0d1117",
+            bordercolor="#30363d",
+            borderwidth=1,
+            font=dict(color="#f0f6fc"),
+        ),
+        bargap=0.1,
         xaxis=dict(
             gridcolor="#30363d",
             color="#f0f6fc",
@@ -1232,18 +1284,17 @@ async def listening_timeline():
                 bgcolor="#0d1117",
                 bordercolor="#30363d",
                 borderwidth=1,
+                thickness=0.4,
             ),
             rangeselector=dict(
-                buttons=list(
-                    [
-                        dict(count=7, label="1w", step="day", stepmode="backward"),
-                        dict(count=14, label="2w", step="day", stepmode="backward"),
-                        dict(count=1, label="1m", step="month", stepmode="backward"),
-                        dict(count=3, label="3m", step="month", stepmode="backward"),
-                        dict(count=6, label="6m", step="month", stepmode="backward"),
-                        dict(step="all", label="All"),
-                    ]
-                ),
+                buttons=[
+                    dict(count=7, label="1w", step="day", stepmode="backward"),
+                    dict(count=14, label="2w", step="day", stepmode="backward"),
+                    dict(count=1, label="1m", step="month", stepmode="backward"),
+                    dict(count=3, label="3m", step="month", stepmode="backward"),
+                    dict(count=6, label="6m", step="month", stepmode="backward"),
+                    dict(step="all", label="All"),
+                ],
                 bgcolor="#161b22",
                 activecolor="#238636",
                 bordercolor="#30363d",
@@ -1255,13 +1306,7 @@ async def listening_timeline():
         hovermode="x unified",
     )
 
-    # Convert to plain dict without binary encoding
-    fig_dict = fig.to_dict()
-    # Force y and x values to be plain lists
-    fig_dict["data"][0]["y"] = df["plays"].tolist()
-    fig_dict["data"][0]["x"] = df["date"].dt.strftime("%Y-%m-%dT%H:%M:%S").tolist()
-
-    return fig_dict
+    return fig.to_dict()
 
 
 @app.get("/recent-stats")

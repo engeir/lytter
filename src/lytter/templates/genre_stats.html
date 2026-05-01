@@ -53,8 +53,8 @@
       <div class="card">
         <div class="card-body">
           <h5 class="card-title">Genre Evolution Over Time</h5>
-          <p class="text-muted small">Share of listening per genre (top 8) weighted by play count and Last.fm tag strength.</p>
-          <div id="evolution-chart" style="min-height: 400px;"></div>
+          <p class="text-muted small">Top 10 genres per year by share — use the slider or ▶ to animate.</p>
+          <div id="evolution-chart"></div>
         </div>
       </div>
     </div>
@@ -72,39 +72,16 @@
       });
     });
 
-    // Genre evolution chart
-    fetch('/api/genre/evolution')
+    // Genre ranking chart
+    fetch('/charts/genre/ranking')
       .then(r => r.json())
       .then(data => {
-        if (!data.years || data.years.length === 0) {
+        if (!data.data || data.data.length === 0) {
           document.getElementById('evolution-chart').innerHTML =
             '<p class="text-muted">No genre data yet. Visit artist pages to populate genres.</p>';
           return;
         }
-        const colors = [
-          '#58a6ff', '#3fb950', '#f78166', '#d2a8ff',
-          '#ffa657', '#79c0ff', '#56d364', '#ff7b72'
-        ];
-        const traces = data.series.map((s, i) => ({
-          x: data.years,
-          y: s.data,
-          name: s.genre,
-          type: 'scatter',
-          mode: 'lines',
-          stackgroup: 'one',
-          line: { color: colors[i % colors.length] },
-          hovertemplate: `%{y:.1f}%<extra>${s.genre}</extra>`
-        }));
-        const layout = {
-          paper_bgcolor: '#161b22',
-          plot_bgcolor: '#161b22',
-          font: { color: '#f0f6fc' },
-          xaxis: { gridcolor: '#30363d', color: '#f0f6fc' },
-          yaxis: { gridcolor: '#30363d', color: '#f0f6fc', ticksuffix: '%', range: [0, 100] },
-          legend: { bgcolor: 'rgba(0,0,0,0)', font: { color: '#f0f6fc' } },
-          margin: { t: 20 },
-        };
-        Plotly.newPlot('evolution-chart', traces, layout, { responsive: true });
+        Plotly.newPlot('evolution-chart', data, { responsive: true, displayModeBar: false });
       });
   </script>
 {% endblock %}

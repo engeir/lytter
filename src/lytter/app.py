@@ -3093,9 +3093,9 @@ async def genre_top_genres_year(request: Request, year: str, limit: int = 20):
     )
 
 
-@app.get("/api/genre/evolution")
-async def genre_evolution():
-    """Genre distribution over years for stacked area chart."""
+@app.get("/charts/genre/evolution")
+async def genre_evolution_chart(limit: int = 25):
+    """Genre share over years as a heatmap — genres × years, color = % share."""
     with sqlite3.connect(DB_NAME) as conn:
         rows = conn.execute(
             """SELECT strftime('%Y', m.timestamp, 'unixepoch') as year,
@@ -3107,7 +3107,6 @@ async def genre_evolution():
                ORDER BY year""",
         ).fetchall()
 
-    # Aggregate per year
     year_totals: dict[str, dict[str, float]] = {}
     for year, _artist, plays, tags_json in rows:
         if year not in year_totals:
@@ -3117,22 +3116,291 @@ async def genre_evolution():
             weight = int(entry.get("weight", 1))
             year_totals[year][tag] = year_totals[year].get(tag, 0.0) + plays * (weight / 100)
 
-    # Find top 8 genres overall
     overall: dict[str, float] = {}
     for ytags in year_totals.values():
         for tag, score in ytags.items():
             overall[tag] = overall.get(tag, 0.0) + score
-    top_genres = [g for g, _ in sorted(overall.items(), key=lambda x: x[1], reverse=True)[:8]]
+    top_genres = [g for g, _ in sorted(overall.items(), key=lambda x: x[1], reverse=True)[:limit]]
 
     years = sorted(year_totals.keys())
-    series = []
+    # z[row=genre][col=year], genres sorted descending so top genre is at top
+    z: list[list[float]] = []
+    text: list[list[str]] = []
     for genre in top_genres:
-        raw = [year_totals[y].get(genre, 0.0) for y in years]
-        year_sums = [sum(year_totals[y].values()) for y in years]
-        pct = [round(raw[i] / year_sums[i] * 100, 1) if year_sums[i] else 0.0 for i in range(len(years))]
-        series.append({"genre": genre, "data": pct})
+        row_z: list[float] = []
+        row_t: list[str] = []
+        for y in years:
+            total = sum(year_totals[y].values())
+            pct = round(year_totals[y].get(genre, 0.0) / total * 100, 1) if total else 0.0
+            row_z.append(pct)
+            row_t.append(f"{genre}<br>{y}: {pct}%")
+        z.append(row_z)
+        text.append(row_t)
 
-    return {"years": years, "series": series}
+    fig = go.Figure(
+        go.Heatmap(
+            z=z,
+            x=years,
+            y=top_genres,
+            text=text,
+            hovertemplate="%{text}<extra></extra>",
+            colorscale=[
+                [0.0, "#161b22"],
+                [0.01, "#0d2d3a"],
+                [0.15, "#0e4d6e"],
+                [0.4, "#1f6feb"],
+                [0.7, "#58a6ff"],
+                [1.0, "#cae8ff"],
+            ],
+            showscale=True,
+            colorbar=dict(
+                title=dict(text="Share %", font=dict(color="#8b949e")),
+                ticksuffix="%",
+                bgcolor="#161b22",
+                bordercolor="#30363d",
+                borderwidth=1,
+                tickfont=dict(color="#8b949e"),
+                thickness=12,
+                len=0.9,
+            ),
+            xgap=2,
+            ygap=2,
+            zmin=0,
+        )
+    )
+
+    cell_h = 28
+    fig.update_layout(
+        paper_bgcolor="#161b22",
+        plot_bgcolor="#161b22",
+        font=dict(color="#f0f6fc"),
+        height=max(300, len(top_genres) * cell_h + 80),
+        margin=dict(l=120, r=80, t=20, b=40),
+        xaxis=dict(
+            gridcolor="#30363d",
+            color="#8b949e",
+            tickfont=dict(size=11),
+            side="top",
+        ),
+        yaxis=dict(
+            gridcolor="#30363d",
+            color="#f0f6fc",
+            tickfont=dict(size=11),
+            autorange="reversed",
+        ),
+    )
+
+    return fig.to_dict()
+
+
+@app.get("/charts/genre/ranking")
+async def genre_ranking_chart():
+    """Animated bar chart race — top 10 genres per year, slider controls year."""
+    with sqlite3.connect(DB_NAME) as conn:
+        rows = conn.execute(
+            """SELECT strftime('%Y', m.timestamp, 'unixepoch') as year,
+                      m.artist, COUNT(*) as plays, ag.tags
+               FROM musiclibrary m
+               JOIN artist_genres ag ON ag.artist = m.artist
+               WHERE ag.tags != '[]'
+               GROUP BY year, m.artist
+               ORDER BY year""",
+        ).fetchall()
+
+    year_totals: dict[str, dict[str, float]] = {}
+    for year, _artist, plays, tags_json in rows:
+        if year not in year_totals:
+            year_totals[year] = {}
+        for entry in json.loads(tags_json):
+            tag = str(entry["tag"]).lower()
+            weight = int(entry.get("weight", 1))
+            year_totals[year][tag] = year_totals[year].get(tag, 0.0) + plays * (weight / 100)
+
+    overall: dict[str, float] = {}
+    for ytags in year_totals.values():
+        for tag, score in ytags.items():
+            overall[tag] = overall.get(tag, 0.0) + score
+    # Candidate pool: top 30 overall
+    candidates = [g for g, _ in sorted(overall.items(), key=lambda x: x[1], reverse=True)[:30]]
+
+    palette = [
+        "#58a6ff", "#3fb950", "#f78166", "#d2a8ff", "#ffa657",
+        "#79c0ff", "#56d364", "#ff7b72", "#e3b341", "#bc8cff",
+        "#ff9bce", "#7ee787", "#ffa198", "#a5d6ff", "#f0883e",
+        "#cae8ff", "#b3d4f5", "#ffdcd7", "#ddf4ff", "#d4edda",
+        "#ffb3b3", "#b5f4a5", "#c5def5", "#ffe4c4", "#e2c9f5",
+        "#ffd1a9", "#c9f0d1", "#f5c9e2", "#c9e2f5", "#f5f0c9",
+    ]
+    color_map = {g: palette[i % len(palette)] for i, g in enumerate(candidates)}
+
+    years = sorted(year_totals.keys())
+    TOP_N = 10
+
+    def frame_data(year: str) -> tuple[list[str], list[float], list[str]]:
+        """Return (genres, shares, colors) for the top N genres in a year."""
+        total = sum(year_totals[year].values())
+        shares = {
+            g: round(year_totals[year].get(g, 0.0) / total * 100, 1) if total else 0.0
+            for g in candidates
+        }
+        top = sorted(shares.items(), key=lambda x: x[1])[-TOP_N:]
+        genres = [g for g, _ in top]
+        vals = [v for _, v in top]
+        colors = [color_map[g] for g in genres]
+        return genres, vals, colors
+
+    # Global x-axis max for a stable scale
+    all_shares = [
+        year_totals[y].get(g, 0.0) / sum(year_totals[y].values()) * 100
+        for y in years
+        for g in candidates
+        if sum(year_totals[y].values()) > 0
+    ]
+    x_max = max(all_shares) * 1.18 if all_shares else 50.0
+
+    init_genres, init_vals, init_colors = frame_data(years[-1])
+
+    # Fixed left margin wide enough for the longest label across all frames
+    # so the plot area never shifts when labels change between years
+    all_frame_genres = [g for y in years for g in frame_data(y)[0]]
+    left_margin = max(len(g) for g in all_frame_genres) * 7 + 16
+
+    frames = []
+    for year in years:
+        genres, vals, colors = frame_data(year)
+        frames.append(
+            go.Frame(
+                data=[
+                    go.Bar(
+                        orientation="h",
+                        x=vals,
+                        y=genres,
+                        marker_color=colors,
+                        text=[f"{v:.1f}%" for v in vals],
+                        textposition="outside",
+                        textfont=dict(color="#f0f6fc", size=11),
+                        cliponaxis=False,
+                    )
+                ],
+                layout=go.Layout(
+                    yaxis=dict(categoryorder="array", categoryarray=genres),
+                    title_text=f"Top 10 Genres — {year}",
+                ),
+                name=year,
+            )
+        )
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                orientation="h",
+                x=init_vals,
+                y=init_genres,
+                marker_color=init_colors,
+                text=[f"{v:.1f}%" for v in init_vals],
+                textposition="outside",
+                textfont=dict(color="#f0f6fc", size=11),
+                cliponaxis=False,
+            )
+        ],
+        frames=frames,
+    )
+
+    fig.update_layout(
+        title=f"Top 10 Genres — {years[-1]}",
+        paper_bgcolor="#161b22",
+        plot_bgcolor="#161b22",
+        font=dict(color="#f0f6fc"),
+        height=420,
+        margin=dict(l=left_margin, r=60, t=60, b=80),
+        xaxis=dict(
+            gridcolor="#30363d",
+            color="#8b949e",
+            ticksuffix="%",
+            range=[0, x_max],
+        ),
+        yaxis=dict(
+            gridcolor="#30363d",
+            color="#f0f6fc",
+            tickfont=dict(size=12),
+            categoryorder="array",
+            categoryarray=init_genres,
+        ),
+        updatemenus=[
+            dict(
+                type="buttons",
+                showactive=False,
+                y=1.12,
+                x=0,
+                xanchor="left",
+                buttons=[
+                    dict(
+                        label="▶",
+                        method="animate",
+                        args=[
+                            None,
+                            dict(
+                                frame=dict(duration=900, redraw=True),
+                                fromcurrent=True,
+                                transition=dict(duration=500, easing="cubic-in-out"),
+                            ),
+                        ],
+                    ),
+                    dict(
+                        label="⏸",
+                        method="animate",
+                        args=[
+                            [None],
+                            dict(
+                                frame=dict(duration=0, redraw=False),
+                                mode="immediate",
+                                transition=dict(duration=0),
+                            ),
+                        ],
+                    ),
+                ],
+                bgcolor="#21262d",
+                bordercolor="#30363d",
+                font=dict(color="#f0f6fc"),
+            )
+        ],
+        sliders=[
+            dict(
+                active=len(years) - 1,
+                steps=[
+                    dict(
+                        method="animate",
+                        args=[
+                            [year],
+                            dict(
+                                mode="immediate",
+                                frame=dict(duration=400, redraw=True),
+                                transition=dict(duration=300),
+                            ),
+                        ],
+                        label=year,
+                    )
+                    for year in years
+                ],
+                x=0,
+                y=0,
+                len=1.0,
+                currentvalue=dict(
+                    prefix="Year: ",
+                    font=dict(color="#f0f6fc", size=13),
+                    visible=True,
+                    xanchor="center",
+                ),
+                bgcolor="#21262d",
+                bordercolor="#30363d",
+                tickcolor="#30363d",
+                font=dict(color="#8b949e", size=10),
+                pad=dict(t=50, b=10),
+            )
+        ],
+    )
+
+    return fig.to_dict()
 
 
 @app.get("/genre/{genre_name}", response_class=HTMLResponse)

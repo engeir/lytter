@@ -71,6 +71,14 @@
     <div class="col-lg-6 mb-4">
       <div class="card">
         <div class="card-body">
+          <h5 class="card-title">Activity Calendar</h5>
+          <div hx-get="/html/calendar-heatmap" hx-trigger="load">{{ loading_spinner("Loading calendar...") }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+      <div class="card">
+        <div class="card-body">
           <h5 class="card-title">Recent Favorites</h5>
           <div hx-get="/html/recent-favorites" hx-trigger="load">{{ loading_spinner("Loading favorites...") }}</div>
         </div>

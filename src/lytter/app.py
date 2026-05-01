@@ -1409,6 +1409,105 @@ async def recent_stats():
     }
 
 
+@app.get("/html/calendar-heatmap", response_class=HTMLResponse)
+async def calendar_heatmap_html():
+    """GitHub-style activity calendar as a responsive SVG."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DATE(timestamp, 'unixepoch') as date, COUNT(*) as plays
+            FROM musiclibrary
+            WHERE timestamp >= strftime('%s', 'now', '-371 days')
+            GROUP BY date
+            ORDER BY date ASC
+        """)
+        result = cursor.fetchall()
+
+    plays_by_date: dict[str, int] = {row[0]: row[1] for row in result}
+
+    today = datetime.date.today()
+    # Align to Monday-first weeks
+    this_monday = today - datetime.timedelta(days=today.weekday())
+    start = this_monday - datetime.timedelta(weeks=52)
+
+    non_zero = sorted(v for v in plays_by_date.values() if v > 0)
+    if non_zero:
+        n = len(non_zero)
+        q1 = non_zero[n // 4]
+        q2 = non_zero[n // 2]
+        q3 = non_zero[3 * n // 4]
+    else:
+        q1, q2, q3 = 1, 2, 3
+
+    def cell_color(count: int) -> str:
+        if count == 0:
+            return "#161b22"
+        if count <= q1:
+            return "#0e4429"
+        if count <= q2:
+            return "#006d32"
+        if count <= q3:
+            return "#26a641"
+        return "#39d353"
+
+    CELL = 11
+    GAP = 3
+    STEP = CELL + GAP
+    NUM_WEEKS = 53
+    LEFT = 28
+    TOP = 18
+
+    vw = LEFT + NUM_WEEKS * STEP
+    vh = TOP + 7 * STEP + 2
+
+    parts: list[str] = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {vw} {vh}" '
+        f'style="width:100%;height:auto;display:block;">'
+    ]
+
+    DAYS_IN_FIRST_WEEK = 7
+    # Month labels
+    seen: set[str] = set()
+    for week in range(NUM_WEEKS):
+        week_mon = start + datetime.timedelta(weeks=week)
+        mk = week_mon.strftime("%Y-%m")
+        if mk not in seen and week_mon.day <= DAYS_IN_FIRST_WEEK:
+            seen.add(mk)
+            x = LEFT + week * STEP
+            parts.append(
+                f'<text x="{x}" y="12" font-size="10" fill="#8b949e" font-family="sans-serif">'
+                f'{week_mon.strftime("%b")}</text>'
+            )
+
+    # Day labels: Tue (index 1), Thu (index 3), Sat (index 5) — Mon is index 0
+    for dow, label in [(1, "Tue"), (3, "Thu"), (5, "Sat")]:
+        y = TOP + dow * STEP + CELL - 1
+        parts.append(
+            f'<text x="{LEFT - 4}" y="{y}" font-size="10" fill="#8b949e" '
+            f'font-family="sans-serif" text-anchor="end">{label}</text>'
+        )
+
+    # Cells
+    for week in range(NUM_WEEKS):
+        for dow in range(7):
+            day = start + datetime.timedelta(weeks=week, days=dow)
+            if day > today:
+                continue
+            ds = day.strftime("%Y-%m-%d")
+            count = plays_by_date.get(ds, 0)
+            color = cell_color(count)
+            x = LEFT + week * STEP
+            y = TOP + dow * STEP
+            noun = "scrobble" if count == 1 else "scrobbles"
+            parts.append(
+                f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" rx="2" ry="2" '
+                f'fill="{color}"><title>{ds}: {count} {noun}</title></rect>'
+            )
+
+    parts.append("</svg>")
+    return HTMLResponse("".join(parts))
+
+
 @app.get("/html/recent-favorites", response_class=HTMLResponse)
 async def recent_favorites_html(request: Request):
     """Get recent favorites as HTML fragment for HTMX."""

@@ -2,6 +2,7 @@
 
 import datetime
 import json
+import math
 import os
 import re
 import sqlite3
@@ -3487,19 +3488,31 @@ async def discovery_page(request: Request):
     """Music discovery timeline — artists sorted by first scrobble date."""
     with sqlite3.connect(DB_NAME) as conn:
         rows = conn.execute(
-            "SELECT artist, MIN(timestamp) as first_heard FROM musiclibrary GROUP BY artist ORDER BY first_heard ASC"
+            """SELECT artist, MIN(timestamp) as first_heard, COUNT(*) as total_plays
+               FROM musiclibrary GROUP BY artist ORDER BY first_heard ASC"""
         ).fetchall()
 
-    years_data: dict[str, list[dict[str, str]]] = {}
-    for artist, ts in rows:
+    max_plays = max((row[2] for row in rows), default=1)
+
+    years_data: dict[str, list[dict[str, str | float]]] = {}
+    for artist, ts, plays in rows:
         dt = datetime.datetime.fromtimestamp(ts)
         year = str(dt.year)
         if year not in years_data:
             years_data[year] = []
-        years_data[year].append({"artist": artist, "date": dt.strftime("%-d %b")})
+        font_size = round(0.2 + math.log(plays + 1) / math.log(max_plays + 1) * 2.2, 2)
+        years_data[year].append({
+            "artist": artist,
+            "date": dt.strftime("%-d %b"),
+            "plays": plays,
+            "font_size": font_size,
+        })
 
-    # Reverse so most recent year is first
-    ordered = [(y, years_data[y]) for y in sorted(years_data.keys(), reverse=True)]
+    # Sort within each year by plays descending, then reverse years
+    ordered = [
+        (y, sorted(years_data[y], key=lambda e: e["plays"], reverse=True))
+        for y in sorted(years_data.keys(), reverse=True)
+    ]
     return templates.TemplateResponse(
         request, "discovery.html", {"years": ordered}
     )

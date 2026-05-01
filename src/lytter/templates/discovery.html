@@ -23,9 +23,10 @@
                style="background-color: var(--card-bg);
                       color: var(--text-primary);
                       border: 1px solid var(--border-color);
-                      font-size: 0.85rem;
+                      font-size: {{ entry.font_size }}rem;
+                      opacity: {{ [0.45 + entry.font_size * 0.3, 1.0]|min }};
                       padding: 0.4em 0.7em"
-               title="First heard {{ entry.date }} {{ year }}">{{ entry.artist }}</a>
+               title="First heard {{ entry.date }} {{ year }} · {{ entry.plays }} plays">{{ entry.artist }}</a>
           {% endfor %}
         </div>
       </div>

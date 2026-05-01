@@ -32,16 +32,14 @@ uv run lytter-status    # Check database status
 
 ### Code Quality
 
-```bash
-# Run type checking
-uv run mypy src/
+All edits must pass `hk check`.
 
-# Lint and format with ruff
-uv run ruff check src/
-uv run ruff format src/
+```bash
+# Run checks
+hk check
 
 # Run all pre-commit hooks
-uv run pre-commit run --all-files
+hk fix
 ```
 
 ### Docker

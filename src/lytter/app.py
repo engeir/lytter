@@ -1561,7 +1561,7 @@ async def lost_artists_html():
             """SELECT artist, COUNT(*) as plays, MAX(timestamp) as last_ts
                FROM musiclibrary GROUP BY artist
                HAVING plays >= 20
-                  AND last_ts < strftime('%s', 'now', '-2 years')
+                  AND last_ts < CAST(strftime('%s', 'now', '-2 years') AS INTEGER)
                ORDER BY plays DESC LIMIT 50"""
         ).fetchall()
 

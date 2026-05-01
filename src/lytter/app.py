@@ -915,7 +915,7 @@ class CurrentStats:
             margin=dict(t=10),
             xaxis=dict(
                 gridcolor="#30363d", color="#f0f6fc",
-                range=[initial_start, max_dt],
+                range=[initial_start.strftime("%Y-%m-%d"), max_dt.strftime("%Y-%m-%d")],
                 rangeslider=dict(visible=True, bgcolor="#0d1117",
                                  bordercolor="#30363d", borderwidth=1, thickness=0.3),
                 rangeselector=dict(

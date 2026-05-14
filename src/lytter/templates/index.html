@@ -79,8 +79,8 @@
     <div class="col-lg-6 mb-4">
       <div class="card">
         <div class="card-body">
-          <h5 class="card-title">Recent Favorites</h5>
-          <div hx-get="/html/recent-favorites" hx-trigger="load">{{ loading_spinner("Loading favorites...") }}</div>
+          <h5 class="card-title">Listening Streaks</h5>
+          <div hx-get="/html/streak-history" hx-trigger="load">{{ loading_spinner("Loading...") }}</div>
         </div>
       </div>
     </div>
@@ -98,8 +98,8 @@
     <div class="col-lg-6 mb-4">
       <div class="card">
         <div class="card-body">
-          <h5 class="card-title">Listening Streaks</h5>
-          <div hx-get="/html/streak-history" hx-trigger="load">{{ loading_spinner("Loading...") }}</div>
+          <h5 class="card-title">Recent Favorites</h5>
+          <div hx-get="/html/recent-favorites" hx-trigger="load">{{ loading_spinner("Loading favorites...") }}</div>
         </div>
       </div>
     </div>

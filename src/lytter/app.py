@@ -1533,7 +1533,11 @@ async def streak_history_html():
         return HTMLResponse('<p class="text-muted">No streak data yet.</p>')
 
     max_len = streaks[0]["length"]
-    parts: list[str] = ['<div style="font-size:0.85rem">']
+    parts: list[str] = [
+        '<div style="font-size:0.85rem;display:grid;'
+        "grid-template-columns:1fr auto auto;"
+        'align-items:center;gap:0.35rem 0.75rem">'
+    ]
     for s in streaks:
         length = s["length"]
         start = s["start"]
@@ -1541,13 +1545,12 @@ async def streak_history_html():
         pct = round(length / max_len * 100)
         date_label = f"{start.strftime('%-d %b %Y')} – {end.strftime('%-d %b %Y')}"
         parts.append(
-            f'<div class="d-flex align-items-center gap-2 mb-2">'
-            f'<div style="flex:1;background:#238636;height:14px;border-radius:3px;'
-            f'width:{pct}%;min-width:4px"></div>'
-            f'<span style="white-space:nowrap;color:#f0f6fc;min-width:5em">'
+            f'<div class="bar-chart-track">'
+            f'<div class="bar-chart-fill" style="width:{pct}%;background:#238636"></div>'
+            f'</div>'
+            f'<span style="white-space:nowrap;color:#f0f6fc;text-align:right">'
             f'<strong>{length}</strong> days</span>'
             f'<span class="text-muted" style="white-space:nowrap">{date_label}</span>'
-            f"</div>"
         )
     parts.append("</div>")
     return HTMLResponse("".join(parts))

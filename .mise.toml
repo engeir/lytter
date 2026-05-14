@@ -1,5 +1,6 @@
 [tools]
 "cargo:git-cliff" = "latest"
+uv = "latest"
 
 # Development tasks
 [tasks.run]

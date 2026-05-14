@@ -109,8 +109,30 @@
     <div class="col-12">
       <div class="card">
         <div class="card-body">
-          <h5 class="card-title">Top Artists</h5>
-          <div hx-get="/html/top-artists" hx-trigger="load">{{ loading_spinner("Loading top artists...") }}</div>
+          <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-artists" type="button" role="tab">
+                Artists
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-albums" type="button" role="tab">Albums</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-songs" type="button" role="tab">Songs</button>
+            </li>
+          </ul>
+          <div class="tab-content">
+            <div class="tab-pane show active" id="tab-artists" role="tabpanel">
+              <div hx-get="/html/top-artists" hx-trigger="load">{{ loading_spinner("Loading top artists...") }}</div>
+            </div>
+            <div class="tab-pane" id="tab-albums" role="tabpanel">
+              <div hx-get="/html/top-albums" hx-trigger="load">{{ loading_spinner("Loading top albums...") }}</div>
+            </div>
+            <div class="tab-pane" id="tab-songs" role="tabpanel">
+              <div hx-get="/html/top-songs" hx-trigger="load">{{ loading_spinner("Loading top songs...") }}</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

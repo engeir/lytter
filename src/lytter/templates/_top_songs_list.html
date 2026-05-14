@@ -1,0 +1,16 @@
+{# HTML Fragment for Top Songs List - Loaded via HTMX #}
+{% from 'macros.html' import bar_chart_item %}
+
+{% if songs %}
+  {% set max_plays = songs[0].plays if songs else 1 %}
+  {% for song in songs %}
+    {{ bar_chart_item(label=song.track ~ ' · ' ~ song.artist,
+        value=song.plays,
+        max_value=max_plays,
+        url='/song/' + (song.artist|urlencode) + '/' + (song.track|urlencode),
+    index=loop.index
+    ) }}
+  {% endfor %}
+{% else %}
+  <p class="text-muted">No songs found</p>
+{% endif %}

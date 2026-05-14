@@ -1,0 +1,16 @@
+{# HTML Fragment for Top Albums List - Loaded via HTMX #}
+{% from 'macros.html' import bar_chart_item %}
+
+{% if albums %}
+  {% set max_plays = albums[0].plays if albums else 1 %}
+  {% for album in albums %}
+    {{ bar_chart_item(label=album.album ~ ' · ' ~ album.artist,
+        value=album.plays,
+        max_value=max_plays,
+        url='/album/' + (album.artist|urlencode) + '/' + (album.album|urlencode),
+    index=loop.index
+    ) }}
+  {% endfor %}
+{% else %}
+  <p class="text-muted">No albums found</p>
+{% endif %}

@@ -1213,6 +1213,40 @@ async def top_artists_html(request: Request):
     )
 
 
+@app.get("/html/top-albums", response_class=HTMLResponse)
+async def top_albums_html(request: Request):
+    """Get top albums as HTML fragment for HTMX."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT artist, album, COUNT(*) as plays FROM musiclibrary"
+            " WHERE album != '' GROUP BY artist, album ORDER BY plays DESC LIMIT 50"
+        )
+        result = cursor.fetchall()
+
+    albums = [{"artist": row[0], "album": row[1], "plays": row[2]} for row in result]
+    return templates.TemplateResponse(
+        request, "_top_albums_list.html", {"albums": albums}
+    )
+
+
+@app.get("/html/top-songs", response_class=HTMLResponse)
+async def top_songs_html(request: Request):
+    """Get top songs as HTML fragment for HTMX."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT artist, track, COUNT(*) as plays FROM musiclibrary"
+            " GROUP BY artist, track ORDER BY plays DESC LIMIT 50"
+        )
+        result = cursor.fetchall()
+
+    songs = [{"artist": row[0], "track": row[1], "plays": row[2]} for row in result]
+    return templates.TemplateResponse(
+        request, "_top_songs_list.html", {"songs": songs}
+    )
+
+
 @app.get("/charts/listening-timeline")
 async def listening_timeline():
     """Generate listening timeline chart."""

@@ -213,7 +213,7 @@
       }
 
       function loadEvolutionForType(itemType) {
-          fetch(`/api/yearly/evolution?year=${currentYear}&item_type=${itemType}&top_n=15`)
+          fetch(`/api/yearly/evolution?year=${currentYear}&item_type=${itemType}&top_n=6`)
               .then(response => response.json())
               .then(data => {
                   renderBumpChart(data, itemType);
@@ -230,18 +230,18 @@
               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
           ];
 
-          // Select top 8 items by total yearly plays
+          // Select top 50 items by total yearly plays from the fetched pool
           const totals = {};
           data.items.forEach(item => {
               totals[item] = data.data[item].reduce((sum, v) => sum + v, 0);
           });
-          const top8 = [...data.items]
+          const topItems = [...data.items]
               .sort((a, b) => totals[b] - totals[a])
-              .slice(0, 10);
+              .slice(0, 50);
 
           // Marker scaling: map play count to [BASE_SIZE, MAX_SIZE]
           let maxPlays = 1;
-          top8.forEach(item => {
+          topItems.forEach(item => {
               data.data[item].forEach(plays => {
                   if (plays > maxPlays) maxPlays = plays;
               });
@@ -250,26 +250,37 @@
           const MAX_SIZE = 18;
           const scale = (MAX_SIZE - BASE_SIZE) / maxPlays;
 
-          // Compute per-month ranks against ALL fetched items (not just top 8)
+          // Compute per-month ranks against ALL fetched items
           const monthRanks = {};
-          top8.forEach(item => { monthRanks[item] = []; });
+          topItems.forEach(item => { monthRanks[item] = []; });
 
           for (let mIdx = 0; mIdx < 12; mIdx++) {
               const sorted = [...data.items]
                   .map(it => ({ item: it, plays: data.data[it][mIdx] }))
                   .sort((a, b) => b.plays - a.plays);
-              top8.forEach(item => {
+              topItems.forEach(item => {
                   monthRanks[item].push(sorted.findIndex(x => x.item === item) + 1);
               });
           }
 
-          const colors = [
-              '#58a6ff', '#ff6b6b', '#4ecdc4', '#ffd93d', '#ff9ff3',
-              '#a8e6cf', '#ffaaa5', '#b4a7d6'
-          ];
+          // Find worst rank seen among months with actual plays (0-play months excluded)
+          let maxRankSeen = 1;
+          topItems.forEach(item => {
+              monthRanks[item].forEach((rank, mIdx) => {
+                  if (data.data[item][mIdx] > 0 && rank > maxRankSeen) maxRankSeen = rank;
+              });
+          });
+
+          // Dynamic tick interval so y-axis labels stay readable
+          const dtick = maxRankSeen <= 10 ? 1 : maxRankSeen <= 25 ? 5 : 10;
+
+          // 50 evenly spaced hues at fixed saturation/lightness
+          const colors = Array.from({ length: 50 }, (_, i) =>
+              `hsl(${Math.round((i * 360) / 50)}, 70%, 65%)`
+          );
 
           // Build traces — null y-value for months with 0 plays (creates visible gap)
-          const traces = top8.map((item, i) => {
+          const traces = topItems.map((item, i) => {
               const yVals = [];
               const sizes = [];
               const hoverText = [];
@@ -313,38 +324,6 @@
               };
           });
 
-          // Build right-side annotations (one label per item at its last non-null month)
-          // Track used ranks to offset overlapping labels
-          const rankOffsets = {};
-          const annotations = top8.map((item, i) => {
-              let lastMIdx = -1;
-              let lastRank = null;
-              for (let mIdx = 11; mIdx >= 0; mIdx--) {
-                  if (data.data[item][mIdx] > 0) {
-                      lastMIdx = mIdx;
-                      lastRank = monthRanks[item][mIdx];
-                      break;
-                  }
-              }
-              if (lastMIdx === -1) return null;
-
-              const offsetKey = `${lastMIdx}-${lastRank}`;
-              if (!rankOffsets[offsetKey]) rankOffsets[offsetKey] = 0;
-              const yOffset = rankOffsets[offsetKey] * 0.4;
-              rankOffsets[offsetKey]++;
-
-              const labelName = item.length > 25 ? item.substring(0, 22) + '...' : item;
-              return {
-                  x: monthNames[lastMIdx],
-                  y: lastRank + yOffset,
-                  text: labelName,
-                  xanchor: 'left',
-                  yanchor: 'middle',
-                  xshift: 12,
-                  showarrow: false,
-                  font: { color: colors[i % colors.length], size: 10 }
-              };
-          }).filter(Boolean);
 
           const layout = {
               paper_bgcolor: '#161b22',
@@ -362,8 +341,8 @@
                   autorange: false,
                   tickmode: 'linear',
                   tick0: 1,
-                  dtick: 1,
-                  range: [data.items.length + 0.5, 0.5]
+                  dtick: dtick,
+                  range: [maxRankSeen + 0.5, 0.5]
               },
               hovermode: 'closest',
               showlegend: true,
@@ -378,7 +357,6 @@
                   borderwidth: 1,
                   font: { size: 10, color: '#f0f6fc' }
               },
-              annotations: annotations,
               margin: { l: 60, r: 200, t: 20, b: 60 }
           };
 
@@ -424,6 +402,44 @@
 
           chartElement.on('plotly_legendclick', function() { return false; });
           chartElement.on('plotly_legenddoubleclick', function() { return false; });
+
+          setTimeout(() => {
+              const legendItems = chartElement.querySelectorAll('.legend .traces .legendtoggle');
+              legendItems.forEach((legendItem, index) => {
+                  legendItem.addEventListener('mouseenter', function() {
+                      const update = {
+                          'line.width': [],
+                          'line.color': [],
+                          'marker.size': [],
+                          opacity: []
+                      };
+                      traces.forEach((trace, traceIndex) => {
+                          if (traceIndex === index) {
+                              update['line.width'].push(5);
+                              update['line.color'].push(colors[traceIndex % colors.length]);
+                              update['marker.size'].push(originalSizes[traceIndex].map(s => s ? s * 1.3 : 0));
+                              update.opacity.push(1);
+                          } else {
+                              update['line.width'].push(2);
+                              update['line.color'].push(colors[traceIndex % colors.length]);
+                              update['marker.size'].push(originalSizes[traceIndex]);
+                              update.opacity.push(0.3);
+                          }
+                      });
+                      Plotly.restyle(chartId, update);
+                  });
+
+                  legendItem.addEventListener('mouseleave', function() {
+                      const update = {
+                          'line.width': traces.map(() => 3),
+                          'line.color': traces.map((t, i) => colors[i % colors.length]),
+                          'marker.size': originalSizes,
+                          opacity: traces.map(() => 1)
+                      };
+                      Plotly.restyle(chartId, update);
+                  });
+              });
+          }, 100);
       }
 
       function loadTimePatterns() {

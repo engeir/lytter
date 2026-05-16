@@ -126,7 +126,7 @@
     <div class="col-12">
       <div class="card">
         <div class="card-body">
-          <h5 class="card-title">📈 Monthly Top 3 Ranking Evolution</h5>
+          <h5 class="card-title">📈 Monthly Ranking Evolution</h5>
 
           <!-- Tab selector for evolution type -->
           <ul class="nav nav-tabs mb-3" id="evolutionTabs" role="tablist">
@@ -152,13 +152,13 @@
 
           <div class="tab-content" id="evolutionTabContent">
             <div class="tab-pane fade show active" id="artists-evolution" role="tabpanel">
-              <div id="artists-evolution-chart" style="height: 600px"></div>
+              <div id="artists-evolution-chart" style="height: 500px"></div>
             </div>
             <div class="tab-pane fade" id="albums-evolution" role="tabpanel">
-              <div id="albums-evolution-chart" style="height: 600px"></div>
+              <div id="albums-evolution-chart" style="height: 500px"></div>
             </div>
             <div class="tab-pane fade" id="songs-evolution" role="tabpanel">
-              <div id="songs-evolution-chart" style="height: 600px"></div>
+              <div id="songs-evolution-chart" style="height: 500px"></div>
             </div>
           </div>
         </div>
@@ -213,10 +213,10 @@
       }
 
       function loadEvolutionForType(itemType) {
-          fetch(`/api/yearly/evolution?year=${currentYear}&item_type=${itemType}&top_n=3`)
+          fetch(`/api/yearly/evolution?year=${currentYear}&item_type=${itemType}&top_n=15`)
               .then(response => response.json())
               .then(data => {
-                  renderEvolutionChart(data, itemType);
+                  renderBumpChart(data, itemType);
               })
               .catch(error => console.error(`Error loading ${itemType} evolution:`, error));
       }

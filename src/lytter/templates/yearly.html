@@ -221,7 +221,7 @@
               .catch(error => console.error(`Error loading ${itemType} evolution:`, error));
       }
 
-      function renderEvolutionChart(data, itemType) {
+      function renderBumpChart(data, itemType) {
           if (!data.dates || data.dates.length === 0) {
               return;
           }
@@ -230,75 +230,126 @@
               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
           ];
 
-          // Calculate rankings for each month (1 = most plays, 10 = least plays)
-          const rankings = {};
+          // Select top 8 items by total yearly plays
+          const totals = {};
+          data.items.forEach(item => {
+              totals[item] = data.data[item].reduce((sum, v) => sum + v, 0);
+          });
+          const top8 = [...data.items]
+              .sort((a, b) => totals[b] - totals[a])
+              .slice(0, 10);
 
-          // For each month, rank all items by their play count
-          for (let monthIdx = 0; monthIdx < 12; monthIdx++) {
-              const monthScores = data.items.map(item => ({
-                  item: item,
-                  plays: data.data[item][monthIdx]
-              }));
+          // Marker scaling: map play count to [BASE_SIZE, MAX_SIZE]
+          let maxPlays = 1;
+          top8.forEach(item => {
+              data.data[item].forEach(plays => {
+                  if (plays > maxPlays) maxPlays = plays;
+              });
+          });
+          const BASE_SIZE = 6;
+          const MAX_SIZE = 18;
+          const scale = (MAX_SIZE - BASE_SIZE) / maxPlays;
 
-              // Sort by plays (descending) and assign ranks
-              monthScores.sort((a, b) => b.plays - a.plays);
+          // Compute per-month ranks against ALL fetched items (not just top 8)
+          const monthRanks = {};
+          top8.forEach(item => { monthRanks[item] = []; });
 
-              monthScores.forEach((score, rank) => {
-                  if (!rankings[score.item]) {
-                      rankings[score.item] = [];
-                  }
-                  rankings[score.item].push({
-                      rank: rank + 1, // 1-based ranking
-                      plays: score.plays
-                  });
+          for (let mIdx = 0; mIdx < 12; mIdx++) {
+              const sorted = [...data.items]
+                  .map(it => ({ item: it, plays: data.data[it][mIdx] }))
+                  .sort((a, b) => b.plays - a.plays);
+              top8.forEach(item => {
+                  monthRanks[item].push(sorted.findIndex(x => x.item === item) + 1);
               });
           }
 
-          // Bright distinct colors for lines
           const colors = [
               '#58a6ff', '#ff6b6b', '#4ecdc4', '#ffd93d', '#ff9ff3',
-              '#a8e6cf', '#ffaaa5', '#b4a7d6', '#fdcb6e', '#95e1d3'
+              '#a8e6cf', '#ffaaa5', '#b4a7d6'
           ];
 
-          const traces = data.items.map((item, index) => {
-              const itemRankings = rankings[item];
+          // Build traces — null y-value for months with 0 plays (creates visible gap)
+          const traces = top8.map((item, i) => {
+              const yVals = [];
+              const sizes = [];
+              const hoverText = [];
+
+              for (let mIdx = 0; mIdx < 12; mIdx++) {
+                  const plays = data.data[item][mIdx];
+                  const rank = monthRanks[item][mIdx];
+                  if (plays === 0) {
+                      yVals.push(null);
+                      sizes.push(0);
+                  } else {
+                      yVals.push(rank);
+                      sizes.push(Math.round(BASE_SIZE + plays * scale));
+                  }
+                  hoverText.push(plays === 0
+                      ? `${monthNames[mIdx]}<br>Plays: 0`
+                      : `${monthNames[mIdx]}<br>Rank: #${rank}<br>Plays: ${plays}`);
+              }
+
               const displayName = item.length > 30 ? item.substring(0, 27) + '...' : item;
-
-              // Create hover text with plays
-              const hoverText = itemRankings.map((r, monthIdx) =>
-                  `${monthNames[monthIdx]}<br>Rank: #${r.rank}<br>Plays: ${r.plays}`
-              );
-
               return {
                   x: monthNames,
-                  y: itemRankings.map(r => r.rank),
+                  y: yVals,
                   name: displayName,
                   type: 'scatter',
                   mode: 'lines+markers',
+                  connectgaps: false,
                   line: {
-                      color: colors[index % colors.length],
+                      shape: 'spline',
+                      color: colors[i % colors.length],
                       width: 3
                   },
                   marker: {
-                      size: 8,
-                      color: colors[index % colors.length],
-                      line: {
-                          color: '#161b22',
-                          width: 2
-                      }
+                      size: sizes,
+                      color: colors[i % colors.length],
+                      line: { color: '#161b22', width: 2 }
                   },
                   hovertext: hoverText,
-                  hoverinfo: 'text'
+                  hoverinfo: 'text',
+                  showlegend: true
               };
           });
+
+          // Build right-side annotations (one label per item at its last non-null month)
+          // Track used ranks to offset overlapping labels
+          const rankOffsets = {};
+          const annotations = top8.map((item, i) => {
+              let lastMIdx = -1;
+              let lastRank = null;
+              for (let mIdx = 11; mIdx >= 0; mIdx--) {
+                  if (data.data[item][mIdx] > 0) {
+                      lastMIdx = mIdx;
+                      lastRank = monthRanks[item][mIdx];
+                      break;
+                  }
+              }
+              if (lastMIdx === -1) return null;
+
+              const offsetKey = `${lastMIdx}-${lastRank}`;
+              if (!rankOffsets[offsetKey]) rankOffsets[offsetKey] = 0;
+              const yOffset = rankOffsets[offsetKey] * 0.4;
+              rankOffsets[offsetKey]++;
+
+              const labelName = item.length > 25 ? item.substring(0, 22) + '...' : item;
+              return {
+                  x: monthNames[lastMIdx],
+                  y: lastRank + yOffset,
+                  text: labelName,
+                  xanchor: 'left',
+                  yanchor: 'middle',
+                  xshift: 12,
+                  showarrow: false,
+                  font: { color: colors[i % colors.length], size: 10 }
+              };
+          }).filter(Boolean);
 
           const layout = {
               paper_bgcolor: '#161b22',
               plot_bgcolor: '#161b22',
-              font: {
-                  color: '#f0f6fc',
-                  size: 12
-              },
+              font: { color: '#f0f6fc', size: 12 },
               xaxis: {
                   gridcolor: '#30363d',
                   color: '#f0f6fc',
@@ -307,12 +358,12 @@
               yaxis: {
                   gridcolor: '#30363d',
                   color: '#f0f6fc',
-                  title: 'Ranking',
-                  autorange: false, // Manual range control
+                  title: 'Rank',
+                  autorange: false,
                   tickmode: 'linear',
                   tick0: 1,
                   dtick: 1,
-                  range: [15.5, 0.5] // Reversed: show ranks 1-15 (higher rank number at bottom)
+                  range: [data.items.length + 0.5, 0.5]
               },
               hovermode: 'closest',
               showlegend: true,
@@ -325,129 +376,54 @@
                   bgcolor: 'rgba(22, 27, 34, 0.9)',
                   bordercolor: '#30363d',
                   borderwidth: 1,
-                  font: {
-                      size: 10,
-                      color: '#f0f6fc'
-                  }
+                  font: { size: 10, color: '#f0f6fc' }
               },
-              margin: {
-                  l: 80,
-                  r: 200,
-                  t: 20,
-                  b: 60
-              }
+              annotations: annotations,
+              margin: { l: 60, r: 200, t: 20, b: 60 }
           };
 
           const chartId = `${itemType}-evolution-chart`;
-          const config = {
-              responsive: true,
-              displayModeBar: false
-          };
+          Plotly.newPlot(chartId, traces, layout, { responsive: true, displayModeBar: false });
 
-          Plotly.newPlot(chartId, traces, layout, config);
-
-          // Add hover highlighting: brighten hovered line, fade others
           const chartElement = document.getElementById(chartId);
+          const originalSizes = traces.map(t => [...t.marker.size]);
 
           chartElement.on('plotly_hover', function(eventData) {
               const hoveredIndex = eventData.points[0].curveNumber;
-
-              // Create update object to modify all traces
               const update = {
                   'line.width': [],
                   'line.color': [],
                   'marker.size': [],
                   opacity: []
               };
-
               traces.forEach((trace, index) => {
                   if (index === hoveredIndex) {
-                      // Highlight the hovered line
                       update['line.width'].push(5);
                       update['line.color'].push(colors[index % colors.length]);
-                      update['marker.size'].push(12);
+                      update['marker.size'].push(originalSizes[index].map(s => s ? s * 1.3 : 0));
                       update.opacity.push(1);
                   } else {
-                      // Fade other lines
                       update['line.width'].push(2);
                       update['line.color'].push(colors[index % colors.length]);
-                      update['marker.size'].push(6);
+                      update['marker.size'].push(originalSizes[index]);
                       update.opacity.push(0.3);
                   }
               });
-
               Plotly.restyle(chartId, update);
           });
 
           chartElement.on('plotly_unhover', function() {
-              // Reset all traces to default styling
               const update = {
                   'line.width': traces.map(() => 3),
                   'line.color': traces.map((t, i) => colors[i % colors.length]),
-                  'marker.size': traces.map(() => 8),
+                  'marker.size': originalSizes,
                   opacity: traces.map(() => 1)
               };
-
               Plotly.restyle(chartId, update);
           });
 
-          // Add legend click/hover highlighting
-          chartElement.on('plotly_legendclick', function(eventData) {
-              // Prevent default toggle behavior
-              return false;
-          });
-
-          chartElement.on('plotly_legenddoubleclick', function(eventData) {
-              // Prevent default isolate behavior
-              return false;
-          });
-
-          // Add legend hover effect using CSS approach
-          // We'll attach hover listeners to the legend items after a short delay
-          setTimeout(() => {
-              const legendItems = chartElement.querySelectorAll('.legend .traces .legendtoggle');
-
-              legendItems.forEach((item, index) => {
-                  item.addEventListener('mouseenter', function() {
-                      const update = {
-                          'line.width': [],
-                          'line.color': [],
-                          'marker.size': [],
-                          opacity: []
-                      };
-
-                      traces.forEach((trace, traceIndex) => {
-                          if (traceIndex === index) {
-                              // Highlight the hovered legend's line
-                              update['line.width'].push(5);
-                              update['line.color'].push(colors[traceIndex % colors.length]);
-                              update['marker.size'].push(12);
-                              update.opacity.push(1);
-                          } else {
-                              // Fade other lines
-                              update['line.width'].push(2);
-                              update['line.color'].push(colors[traceIndex % colors.length]);
-                              update['marker.size'].push(6);
-                              update.opacity.push(0.3);
-                          }
-                      });
-
-                      Plotly.restyle(chartId, update);
-                  });
-
-                  item.addEventListener('mouseleave', function() {
-                      // Reset all traces to default styling
-                      const update = {
-                          'line.width': traces.map(() => 3),
-                          'line.color': traces.map((t, i) => colors[i % colors.length]),
-                          'marker.size': traces.map(() => 8),
-                          opacity: traces.map(() => 1)
-                      };
-
-                      Plotly.restyle(chartId, update);
-                  });
-              });
-          }, 100);
+          chartElement.on('plotly_legendclick', function() { return false; });
+          chartElement.on('plotly_legenddoubleclick', function() { return false; });
       }
 
       function loadTimePatterns() {

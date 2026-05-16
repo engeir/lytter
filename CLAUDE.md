@@ -5,6 +5,9 @@ this repository.
 
 For any file search or grep in the current git indexed directory use fff tools.
 
+Never run `git add` or `git commit` automatically. Always ask the user before staging or
+committing.
+
 ## Project Overview
 
 **Lytter** is a Last.fm statistics web application built with FastAPI. It fetches and

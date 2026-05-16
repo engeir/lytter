@@ -230,14 +230,12 @@
               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
           ];
 
-          // Select top 50 items by total yearly plays from the fetched pool
+          // Show all pool items sorted by total yearly plays (pool = union of monthly top N)
           const totals = {};
           data.items.forEach(item => {
               totals[item] = data.data[item].reduce((sum, v) => sum + v, 0);
           });
-          const topItems = [...data.items]
-              .sort((a, b) => totals[b] - totals[a])
-              .slice(0, 50);
+          const topItems = [...data.items].sort((a, b) => totals[b] - totals[a]);
 
           // Marker scaling: map play count to [BASE_SIZE, MAX_SIZE]
           let maxPlays = 1;
@@ -342,7 +340,7 @@
                   tickmode: 'linear',
                   tick0: 1,
                   dtick: dtick,
-                  range: [maxRankSeen + 0.5, 0.5]
+                  range: [Math.min(maxRankSeen, 50) + 0.5, 0.5]
               },
               hovermode: 'closest',
               showlegend: true,

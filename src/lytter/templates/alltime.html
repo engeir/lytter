@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}All-Time Charts - Last.fm Stats{% endblock %}
+
+{% block content %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1 class="mb-1">All-Time Charts</h1>
+      <p class="text-muted mb-3">Top 50 by full listening history</p>
+      <ul class="nav nav-tabs" id="item-type-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-artists" data-item-type="artists" type="button" role="tab">Artists</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-albums" data-item-type="albums" type="button" role="tab">Albums</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-songs" data-item-type="songs" type="button" role="tab">Songs</button>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+            <div>
+              <h5 class="card-title mb-0">Accumulated Listen Count</h5>
+              <p class="text-muted small mb-0">Cumulative plays — top 10 visible, toggle others in legend</p>
+            </div>
+            <div class="d-flex gap-2">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Y-axis scale">
+                <button type="button" class="btn btn-outline-secondary active" id="scale-linear">Linear</button>
+                <button type="button" class="btn btn-outline-secondary" id="scale-log">Log</button>
+              </div>
+              <div class="btn-group btn-group-sm" role="group" aria-label="Time mode">
+                <button type="button" class="btn btn-outline-secondary active" id="time-historical">Historical</button>
+                <button type="button" class="btn btn-outline-secondary" id="time-aligned">Aligned</button>
+              </div>
+            </div>
+          </div>
+          <div id="accumulated-chart" style="height: 500px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+            <div>
+              <h5 class="card-title mb-0">Time Spent</h5>
+              <p class="text-muted small mb-0">Total listening time (tracks with known duration)</p>
+            </div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="X-axis scale">
+              <button type="button" class="btn btn-outline-secondary active" id="ts-scale-linear">Linear</button>
+              <button type="button" class="btn btn-outline-secondary" id="ts-scale-log">Log</button>
+            </div>
+          </div>
+          <div id="time-spent-chart"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+  (function () {
+    const SPINNER = '<div class="d-flex justify-content-center align-items-center" style="height:200px"><p class="text-muted">Loading...</p></div>';
+    let currentType = 'artists';
+    let alignMode = false;
+    let accumLogScale = false;
+    let tsLogScale = false;
+    const accumCache = {};
+    const timeCache = {};
+    const config = { responsive: true };
+
+    function setLoading(id) {
+      const el = document.getElementById(id);
+      if (el._plotly) { Plotly.purge(el); el._plotly = false; }
+      el.innerHTML = SPINNER;
+    }
+
+    function fetchAccum(itemType, align) {
+      const key = itemType + '_' + align;
+      if (accumCache[key]) return Promise.resolve(accumCache[key]);
+      return fetch('/charts/accumulated-listens?item_type=' + itemType + '&limit=50&align=' + align)
+        .then(r => r.json())
+        .then(data => { accumCache[key] = data; return data; });
+    }
+
+    function fetchTimeSpent(itemType) {
+      if (timeCache[itemType]) return Promise.resolve(timeCache[itemType]);
+      return fetch('/charts/time-spent?item_type=' + itemType + '&limit=50')
+        .then(r => r.json())
+        .then(data => { timeCache[itemType] = data; return data; });
+    }
+
+    function attachAccumHover(chartId) {
+      const el = document.getElementById(chartId);
+      const n = el.data.length;
+      // Capture auto-assigned colors from Plotly's resolved internal state before any restyle
+      const colors = el._fullData.map(t => t.line.color);
+
+      function highlight(hoveredIndex) {
+        const update = { 'line.width': [], opacity: [], 'line.color': [] };
+        for (let i = 0; i < n; i++) {
+          update['line.width'].push(i === hoveredIndex ? 5 : 1);
+          update.opacity.push(i === hoveredIndex ? 1 : 0.15);
+          update['line.color'].push(colors[i]);
+        }
+        Plotly.restyle(chartId, update);
+      }
+
+      function resetAll() {
+        Plotly.restyle(chartId, {
+          'line.width': Array(n).fill(2),
+          opacity: Array(n).fill(1),
+          'line.color': colors
+        });
+      }
+
+      el.on('plotly_hover', evt => highlight(evt.points[0].curveNumber));
+      el.on('plotly_unhover', resetAll);
+
+      setTimeout(() => {
+        el.querySelectorAll('.legend .traces .legendtoggle').forEach((item, i) => {
+          item.addEventListener('mouseenter', () => highlight(i));
+          item.addEventListener('mouseleave', resetAll);
+        });
+      }, 100);
+    }
+
+    function renderAccum(data) {
+      const d = JSON.parse(JSON.stringify(data));
+      d.layout.yaxis = Object.assign({}, d.layout.yaxis, { type: accumLogScale ? 'log' : 'linear' });
+      const el = document.getElementById('accumulated-chart');
+      el.innerHTML = '';
+      Plotly.newPlot('accumulated-chart', d.data, d.layout, config);
+      el._plotly = true;
+      attachAccumHover('accumulated-chart');
+    }
+
+    function renderTimeSpent(data) {
+      const d = JSON.parse(JSON.stringify(data));
+      d.layout.xaxis = Object.assign({}, d.layout.xaxis, { type: tsLogScale ? 'log' : 'linear' });
+      const el = document.getElementById('time-spent-chart');
+      el.innerHTML = '';
+      Plotly.newPlot('time-spent-chart', d.data, d.layout, config);
+      el._plotly = true;
+    }
+
+    function loadAccum(itemType, align) {
+      setLoading('accumulated-chart');
+      fetchAccum(itemType, align)
+        .then(renderAccum)
+        .catch(() => {
+          document.getElementById('accumulated-chart').innerHTML =
+            '<p class="text-muted p-3">Error loading chart</p>';
+        });
+    }
+
+    function loadTimeSpent(itemType) {
+      setLoading('time-spent-chart');
+      fetchTimeSpent(itemType)
+        .then(renderTimeSpent)
+        .catch(() => {
+          document.getElementById('time-spent-chart').innerHTML =
+            '<p class="text-muted p-3">Error loading chart</p>';
+        });
+    }
+
+    function loadAll(itemType) {
+      loadAccum(itemType, alignMode);
+      loadTimeSpent(itemType);
+    }
+
+    // Item type tabs
+    document.querySelectorAll('#item-type-tabs .nav-link').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#item-type-tabs .nav-link').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const newType = btn.dataset.itemType;
+        if (newType !== currentType) {
+          currentType = newType;
+          loadAll(newType);
+        }
+      });
+    });
+
+    // Accumulated: scale toggle
+    document.getElementById('scale-linear').addEventListener('click', () => {
+      if (accumLogScale) {
+        accumLogScale = false;
+        document.getElementById('scale-linear').classList.add('active');
+        document.getElementById('scale-log').classList.remove('active');
+        Plotly.relayout('accumulated-chart', { 'yaxis.type': 'linear' });
+      }
+    });
+    document.getElementById('scale-log').addEventListener('click', () => {
+      if (!accumLogScale) {
+        accumLogScale = true;
+        document.getElementById('scale-log').classList.add('active');
+        document.getElementById('scale-linear').classList.remove('active');
+        Plotly.relayout('accumulated-chart', { 'yaxis.type': 'log' });
+      }
+    });
+
+    // Accumulated: time mode toggle
+    document.getElementById('time-historical').addEventListener('click', () => {
+      if (alignMode) {
+        alignMode = false;
+        document.getElementById('time-historical').classList.add('active');
+        document.getElementById('time-aligned').classList.remove('active');
+        loadAccum(currentType, false);
+      }
+    });
+    document.getElementById('time-aligned').addEventListener('click', () => {
+      if (!alignMode) {
+        alignMode = true;
+        document.getElementById('time-aligned').classList.add('active');
+        document.getElementById('time-historical').classList.remove('active');
+        loadAccum(currentType, true);
+      }
+    });
+
+    // Time spent: scale toggle
+    document.getElementById('ts-scale-linear').addEventListener('click', () => {
+      if (tsLogScale) {
+        tsLogScale = false;
+        document.getElementById('ts-scale-linear').classList.add('active');
+        document.getElementById('ts-scale-log').classList.remove('active');
+        Plotly.relayout('time-spent-chart', { 'xaxis.type': 'linear' });
+      }
+    });
+    document.getElementById('ts-scale-log').addEventListener('click', () => {
+      if (!tsLogScale) {
+        tsLogScale = true;
+        document.getElementById('ts-scale-log').classList.add('active');
+        document.getElementById('ts-scale-linear').classList.remove('active');
+        Plotly.relayout('time-spent-chart', { 'xaxis.type': 'log' });
+      }
+    });
+
+    loadAll('artists');
+  })();
+  </script>
+{% endblock %}

@@ -3825,6 +3825,200 @@ async def artist_loyalty_chart():
     return fig.to_dict()
 
 
+@app.get("/all-time", response_class=HTMLResponse)
+async def all_time_page(request: Request):
+    """All-time top charts page."""
+    return templates.TemplateResponse(request, "alltime.html", {})
+
+
+@app.get("/charts/accumulated-listens")
+async def accumulated_listens_chart(
+    item_type: str = "artists", limit: int = 50, align: bool = False
+) -> dict:
+    """Cumulative listen count over time for top N artists/albums/songs.
+
+    Parameters
+    ----------
+    item_type : str
+        One of "artists", "albums", or "songs".
+    limit : int
+        Number of top items to include.
+    align : bool
+        If True, each trace x-axis starts at 0 (months since first play)
+        instead of the absolute calendar month.
+
+    Returns
+    -------
+    dict
+        Plotly figure dict.
+    """
+    with sqlite3.connect(DB_NAME) as conn:
+        if item_type == "artists":
+            rows = conn.execute(
+                """SELECT strftime('%Y-%m', m.timestamp, 'unixepoch') as month,
+                          m.artist as label,
+                          COUNT(*) as plays
+                   FROM musiclibrary m
+                   WHERE m.artist IN (
+                       SELECT artist FROM musiclibrary
+                       GROUP BY artist ORDER BY COUNT(*) DESC LIMIT ?
+                   )
+                   GROUP BY month, m.artist
+                   ORDER BY m.artist, month""",
+                (limit,),
+            ).fetchall()
+        elif item_type == "albums":
+            rows = conn.execute(
+                """SELECT strftime('%Y-%m', m.timestamp, 'unixepoch') as month,
+                          m.artist || ' — ' || m.album as label,
+                          COUNT(*) as plays
+                   FROM musiclibrary m
+                   WHERE m.album != ''
+                     AND (m.artist || '|||' || m.album) IN (
+                         SELECT artist || '|||' || album FROM musiclibrary
+                         WHERE album != ''
+                         GROUP BY artist, album ORDER BY COUNT(*) DESC LIMIT ?
+                     )
+                   GROUP BY month, label
+                   ORDER BY label, month""",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT strftime('%Y-%m', m.timestamp, 'unixepoch') as month,
+                          m.artist || ' — ' || m.track as label,
+                          COUNT(*) as plays
+                   FROM musiclibrary m
+                   WHERE (m.artist || '|||' || m.track) IN (
+                       SELECT artist || '|||' || track FROM musiclibrary
+                       GROUP BY artist, track ORDER BY COUNT(*) DESC LIMIT ?
+                   )
+                   GROUP BY month, label
+                   ORDER BY label, month""",
+                (limit,),
+            ).fetchall()
+
+    if not rows:
+        return go.Figure().to_dict()
+
+    df = pd.DataFrame(rows, columns=["month", "label", "plays"])
+    pivot = df.pivot(index="month", columns="label", values="plays")
+    pivot = pivot.reindex(sorted(pivot.index)).fillna(0)
+    cumsum = pivot.cumsum()
+
+    final_order = cumsum.iloc[-1].sort_values(ascending=False)
+    cumsum = cumsum[final_order.index]
+
+    top_visible = 10
+    fig = go.Figure()
+    x_title = "Months since first listen" if align else "Month"
+    for i, label in enumerate(cumsum.columns):
+        visible: bool | str = True if i < top_visible else "legendonly"
+        if align:
+            raw = pivot[label]
+            first_idx = raw[raw > 0].index[0] if (raw > 0).any() else raw.index[0]
+            trimmed = cumsum[label][cumsum.index >= first_idx]
+            x_vals: list = list(range(len(trimmed)))
+            y_vals = trimmed.tolist()
+        else:
+            x_vals = cumsum.index.tolist()
+            y_vals = cumsum[label].tolist()
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                name=label,
+                mode="lines",
+                visible=visible,
+                line=dict(width=2),
+                hovertemplate=f"{label}<br>%{{y:,}} plays<extra></extra>",
+            )
+        )
+
+    fig.update_layout(
+        paper_bgcolor="#161b22",
+        plot_bgcolor="#161b22",
+        font=dict(color="#f0f6fc"),
+        legend=dict(bgcolor="#0d1117", bordercolor="#30363d", borderwidth=1),
+        hovermode="closest",
+        margin=dict(t=10, r=20),
+        xaxis=dict(gridcolor="#30363d", color="#f0f6fc", title=x_title),
+        yaxis=dict(gridcolor="#30363d", color="#f0f6fc", title="Cumulative plays"),
+    )
+    return fig.to_dict()
+
+
+@app.get("/charts/time-spent")
+async def time_spent_chart(item_type: str = "artists", limit: int = 50):
+    """Total time spent on top N artists/albums/songs as a horizontal bar chart."""
+    with sqlite3.connect(DB_NAME) as conn:
+        if item_type == "artists":
+            rows = conn.execute(
+                """SELECT m.artist as label, SUM(td.duration_ms) as total_ms
+                   FROM musiclibrary m
+                   JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+                   WHERE td.duration_ms IS NOT NULL
+                   GROUP BY m.artist
+                   ORDER BY total_ms DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        elif item_type == "albums":
+            rows = conn.execute(
+                """SELECT m.artist || ' — ' || m.album as label,
+                          SUM(td.duration_ms) as total_ms
+                   FROM musiclibrary m
+                   JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+                   WHERE td.duration_ms IS NOT NULL AND m.album != ''
+                   GROUP BY m.artist, m.album
+                   ORDER BY total_ms DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT m.artist || ' — ' || m.track as label,
+                          SUM(td.duration_ms) as total_ms
+                   FROM musiclibrary m
+                   JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+                   WHERE td.duration_ms IS NOT NULL
+                   GROUP BY m.artist, m.track
+                   ORDER BY total_ms DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+
+    if not rows:
+        return go.Figure().to_dict()
+
+    labels = [row[0] for row in rows][::-1]
+    ms_vals = [row[1] for row in rows][::-1]
+    hours = [ms / 3_600_000 for ms in ms_vals]
+    hover = [f"{int(ms // 3_600_000)}h {int((ms % 3_600_000) // 60_000)}m" for ms in ms_vals]
+
+    fig = go.Figure(
+        go.Bar(
+            x=hours,
+            y=labels,
+            orientation="h",
+            marker_color="#1f6feb",
+            marker_opacity=0.8,
+            customdata=hover,
+            hovertemplate="%{y}<br>%{customdata}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        paper_bgcolor="#161b22",
+        plot_bgcolor="#161b22",
+        font=dict(color="#f0f6fc"),
+        height=max(400, len(labels) * 22 + 80),
+        margin=dict(t=10, l=20, r=20, b=40),
+        xaxis=dict(gridcolor="#30363d", color="#f0f6fc", title="Hours"),
+        yaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
+    )
+    return fig.to_dict()
+
+
 def main():
     """Run the application server."""
     uvicorn.run(app, host="0.0.0.0", port=8000)

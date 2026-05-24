@@ -1,6 +1,7 @@
 """Tests for helper functions in lytter.app."""
 
 import sqlite3
+import time
 
 import lytter.app as app_module
 
@@ -36,3 +37,27 @@ def test_get_dashboard_stats_streaks(test_db):
     assert isinstance(stats["longest_streak"], int)
     assert stats["current_streak"] >= 0
     assert stats["longest_streak"] >= 0
+
+
+def test_relative_time_just_now():
+    """Test relative time for very recent timestamp."""
+    ts = int(time.time()) - 10
+    assert app_module._relative_time(ts) == "just now"
+
+
+def test_relative_time_minutes():
+    """Test relative time for minutes ago."""
+    ts = int(time.time()) - 300  # 5 minutes ago
+    assert app_module._relative_time(ts) == "5m ago"
+
+
+def test_relative_time_hours():
+    """Test relative time for hours ago."""
+    ts = int(time.time()) - 7200  # 2 hours ago
+    assert app_module._relative_time(ts) == "2h ago"
+
+
+def test_relative_time_days():
+    """Test relative time for days ago."""
+    ts = int(time.time()) - 172800  # 2 days ago
+    assert app_module._relative_time(ts) == "2d ago"

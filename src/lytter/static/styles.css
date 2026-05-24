@@ -430,3 +430,62 @@ a:hover {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* ===== Recent Plays List ===== */
+.recent-plays-container {
+    position: relative;
+    max-height: 320px;
+    overflow: hidden;
+}
+
+.recent-plays-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.875rem;
+    gap: 8px;
+}
+
+.recent-plays-track {
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.recent-plays-track:hover {
+    color: var(--accent-blue);
+}
+
+.recent-plays-sep {
+    color: var(--text-secondary);
+    margin: 0 4px;
+}
+
+.recent-plays-artist {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.recent-plays-artist:hover {
+    color: var(--accent-blue);
+}
+
+.recent-plays-time {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.recent-plays-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: linear-gradient(transparent, var(--bg-secondary));
+    pointer-events: none;
+}

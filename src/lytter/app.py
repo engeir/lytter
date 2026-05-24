@@ -652,6 +652,29 @@ def _get_dashboard_stats(conn: sqlite3.Connection) -> dict[str, object]:
     }
 
 
+def _relative_time(ts: int) -> str:
+    """Return a human-readable relative time string for a Unix timestamp.
+
+    Parameters
+    ----------
+    ts : int
+        Unix timestamp (seconds).
+
+    Returns
+    -------
+    str
+        E.g. "just now", "5m ago", "3h ago", "2d ago".
+    """
+    delta = int(_time.time()) - ts
+    if delta < 60:  # noqa: PLR2004
+        return "just now"
+    if delta < 3600:  # noqa: PLR2004
+        return f"{delta // 60}m ago"
+    if delta < 86400:  # noqa: PLR2004
+        return f"{delta // 3600}h ago"
+    return f"{delta // 86400}d ago"
+
+
 def fetch_and_cache_track_metadata(artist: str, track: str, mbid: str | None = None) -> None:
     """Fetch and cache release date, album art, popularity, and global Last.fm stats.
 
@@ -1750,6 +1773,31 @@ async def recent_favorites_html(request: Request):
     stats = await recent_stats()
     return templates.TemplateResponse(
         request, "_recent_favorites.html", {**stats}
+    )
+
+
+@app.get("/html/recent-plays", response_class=HTMLResponse)
+async def recent_plays_html(request: Request):
+    """Get last 30 scrobbles as an HTML fragment for HTMX."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT artist, track, timestamp
+            FROM musiclibrary
+            ORDER BY timestamp DESC
+            LIMIT 30
+        """)
+        rows = cursor.fetchall()
+    plays = [
+        {
+            "artist": row[0],
+            "track": row[1],
+            "relative_time": _relative_time(row[2]),
+        }
+        for row in rows
+    ]
+    return templates.TemplateResponse(
+        request, "_recent_plays.html", {"plays": plays}
     )
 
 

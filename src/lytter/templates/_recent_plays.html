@@ -1,0 +1,14 @@
+{# HTML Fragment for Recent Plays - Loaded via HTMX #}
+<div class="recent-plays-container">
+  {% for play in plays %}
+    <div class="recent-plays-row">
+      <span class="recent-plays-title">
+        <a href="/song/{{ play.artist|urlencode }}/{{ play.track|urlencode }}" class="recent-plays-track">{{ play.track }}</a>
+        <span class="recent-plays-sep">·</span>
+        <a href="/artist/{{ play.artist|urlencode }}" class="recent-plays-artist">{{ play.artist }}</a>
+      </span>
+      <span class="recent-plays-time">{{ play.relative_time }}</span>
+    </div>
+  {% endfor %}
+  <div class="recent-plays-fade"></div>
+</div>

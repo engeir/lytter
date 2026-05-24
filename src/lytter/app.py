@@ -599,6 +599,59 @@ def _compute_streaks(conn: sqlite3.Connection) -> tuple[int, int]:
     return current, longest
 
 
+def _get_dashboard_stats(conn: sqlite3.Connection) -> dict[str, object]:
+    """Query all dashboard summary statistics from an open DB connection.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open database connection.
+
+    Returns
+    -------
+    dict[str, object]
+        Keys: total_scrobbles, unique_artists, unique_tracks, unique_albums,
+        total_listening_time, listening_time_known_tracks,
+        listening_time_total_tracks, current_streak, longest_streak.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM musiclibrary")
+    total_scrobbles = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(DISTINCT artist) FROM musiclibrary")
+    unique_artists = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(DISTINCT track) FROM musiclibrary")
+    unique_tracks = cursor.fetchone()[0]
+    cursor.execute(
+        "SELECT COUNT(DISTINCT album) FROM musiclibrary WHERE album != ''"
+    )
+    unique_albums = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT m.artist, m.track, COUNT(*) as plays, td.duration_ms
+        FROM musiclibrary m
+        LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+        GROUP BY m.artist, m.track
+    """)
+    rows = cursor.fetchall()
+    total_ms = sum(row[2] * row[3] for row in rows if row[3])
+    known_track_count = sum(1 for row in rows if row[3])
+    total_track_count = len(rows)
+    total_listening_time = format_listening_time(total_ms) if known_track_count > 0 else None
+    current_streak, longest_streak = _compute_streaks(conn)
+
+    return {
+        "total_scrobbles": total_scrobbles,
+        "unique_artists": unique_artists,
+        "unique_tracks": unique_tracks,
+        "unique_albums": unique_albums,
+        "total_listening_time": total_listening_time,
+        "listening_time_known_tracks": known_track_count,
+        "listening_time_total_tracks": total_track_count,
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+    }
+
+
 def fetch_and_cache_track_metadata(artist: str, track: str, mbid: str | None = None) -> None:
     """Fetch and cache release date, album art, popularity, and global Last.fm stats.
 
@@ -979,31 +1032,7 @@ async def index(request: Request):
     """Display main dashboard page."""
     # Get basic stats
     with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM musiclibrary")
-        total_scrobbles = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(DISTINCT artist) FROM musiclibrary")
-        unique_artists = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(DISTINCT track) FROM musiclibrary")
-        unique_tracks = cursor.fetchone()[0]
-        cursor.execute(
-            "SELECT COUNT(DISTINCT album) FROM musiclibrary WHERE album != ''"
-        )
-        unique_albums = cursor.fetchone()[0]
-
-        # Compute total listening time using cached durations
-        cursor.execute("""
-            SELECT m.artist, m.track, COUNT(*) as plays, td.duration_ms
-            FROM musiclibrary m
-            LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
-            GROUP BY m.artist, m.track
-        """)
-        rows = cursor.fetchall()
-        total_ms = sum(row[2] * row[3] for row in rows if row[3])
-        known_track_count = sum(1 for row in rows if row[3])
-        total_track_count = len(rows)
-        total_listening_time = format_listening_time(total_ms) if known_track_count > 0 else None
-        current_streak, longest_streak = _compute_streaks(conn)
+        stats = _get_dashboard_stats(conn)
 
     # Get current playing track
     current_track = None
@@ -1025,16 +1054,8 @@ async def index(request: Request):
         request,
         "index.html",
         {
-            "total_scrobbles": total_scrobbles,
-            "unique_artists": unique_artists,
-            "unique_tracks": unique_tracks,
-            "unique_albums": unique_albums,
+            **stats,
             "current_track": current_track,
-            "total_listening_time": total_listening_time,
-            "listening_time_known_tracks": known_track_count,
-            "listening_time_total_tracks": total_track_count,
-            "current_streak": current_streak,
-            "longest_streak": longest_streak,
         },
     )
 

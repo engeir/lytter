@@ -19,25 +19,34 @@
     <nav class="navbar navbar-expand-lg navbar-dark">
       <div class="container">
         <a class="navbar-brand" href="/">🎵 Last.fm Stats</a>
-        <div class="navbar-nav">
-          <a class="nav-link" href="/all-time">All Time</a>
-          <a class="nav-link" href="/yearly">Yearly Stats</a>
-          <a class="nav-link" href="/duration-stats">Duration Stats</a>
-          <a class="nav-link" href="/genre-stats">Genre Stats</a>
-          <a class="nav-link" href="/discovery">Discovery</a>
-          <a class="nav-link" href="/artist-stats">Artist Stats</a>
-          <a class="nav-link" href="/compare">Compare</a>
-        </div>
-        <div class="ms-auto">
-          <div class="position-relative" style="width: 300px;">
-            <input type="search" id="artist-search" class="form-control" placeholder="Search artists, albums, songs..." autocomplete="off">
-            <div id="search-results"
-                 class="position-absolute w-100 mt-1"
-                 style="z-index: 1050;
-                        display: none;
-                        max-height: 400px;
-                        overflow-y: auto">
-              <!-- Results populated by JavaScript -->
+        <button class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#main-nav"
+                aria-controls="main-nav"
+                aria-expanded="false"
+                aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="main-nav">
+          <div class="navbar-nav me-auto">
+            <a class="nav-link" href="/all-time">All Time</a>
+            <a class="nav-link" href="/yearly">Yearly Stats</a>
+            <a class="nav-link" href="/duration-stats">Duration Stats</a>
+            <a class="nav-link" href="/genre-stats">Genre Stats</a>
+            <a class="nav-link" href="/discovery">Discovery</a>
+            <a class="nav-link" href="/artist-stats">Artist Stats</a>
+            <a class="nav-link" href="/compare">Compare</a>
+          </div>
+          <div class="navbar-nav">
+            <div class="position-relative" style="width: 300px;">
+              <input type="search" id="artist-search" class="form-control" placeholder="Search artists, albums, songs..." autocomplete="off">
+              <div id="search-results"
+                   class="position-absolute w-100 mt-1"
+                   style="z-index: 1050;
+                          display: none;
+                          max-height: 400px;
+                          overflow-y: auto"></div>
             </div>
           </div>
         </div>

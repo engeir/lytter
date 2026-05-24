@@ -1053,11 +1053,6 @@ class CurrentStats:
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Display main dashboard page."""
-    # Get basic stats
-    with sqlite3.connect(DB_NAME) as conn:
-        stats = _get_dashboard_stats(conn)
-
-    # Get current playing track
     current_track = None
     try:
         user = network.get_user(USER_NAME)
@@ -1072,14 +1067,8 @@ async def index(request: Request):
             }
     except Exception:
         pass
-
     return templates.TemplateResponse(
-        request,
-        "index.html",
-        {
-            **stats,
-            "current_track": current_track,
-        },
+        request, "index.html", {"current_track": current_track}
     )
 
 

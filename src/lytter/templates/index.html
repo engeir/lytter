@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% from 'macros.html' import stat_card, loading_spinner %}
+{% from 'macros.html' import loading_spinner %}
 
-{% block title %}Dashboard - Last.fm Stats{% endblock %}
+{% block title %}Recently - Last.fm Stats{% endblock %}
 
 {% block content %}
   <div class="row">
     <div class="col-12">
-      <h1 class="mb-4">Last.fm Statistics Dashboard</h1>
+      <h1 class="mb-4">Recently</h1>
     </div>
   </div>
 
@@ -34,53 +34,19 @@
   {% endif %}
 
   <div class="row mb-4">
-    <div class="col">{{ stat_card("Total Scrobbles", total_scrobbles) }}</div>
-    <div class="col">{{ stat_card("Unique Artists", unique_artists) }}</div>
-    <div class="col">{{ stat_card("Unique Tracks", unique_tracks) }}</div>
-    <div class="col">{{ stat_card("Unique Albums", unique_albums) }}</div>
-    <div class="col">
-      {% if total_listening_time %}
-        {{ stat_card("Listening Time", total_listening_time) }}
-        {% if listening_time_known_tracks < listening_time_total_tracks %}
-          <small class="text-muted d-block text-center mt-1">{{ listening_time_known_tracks }}/{{ listening_time_total_tracks }} tracks</small>
-        {% endif %}
-      {% else %}
-        {{ stat_card('Listening Time', '—') }}
-      {% endif %}
-    </div>
-    <div class="col">{{ stat_card("Current Streak", current_streak ~ " days") }}</div>
-    <div class="col">{{ stat_card("Longest Streak", longest_streak ~ " days") }}</div>
-  </div>
-
-  <div class="row">
-    <div class="col-12 mb-4">
-      <div class="card">
+    <div class="col-lg-6 mb-4">
+      <div class="card h-100">
         <div class="card-body">
-          <h5 class="card-title">Listening Timeline</h5>
-          <div id="timeline-chart" style="height: 550px;">
-            <div class="d-flex justify-content-center align-items-center h-100">
-              <p class="text-muted">Loading chart...</p>
-            </div>
-          </div>
+          <h5 class="card-title">Recent Plays</h5>
+          <div hx-get="/html/recent-plays" hx-trigger="load">{{ loading_spinner("Loading...") }}</div>
         </div>
       </div>
     </div>
-  </div>
-
-  <div class="row">
     <div class="col-lg-6 mb-4">
-      <div class="card">
+      <div class="card h-100">
         <div class="card-body">
           <h5 class="card-title">Activity Calendar</h5>
           <div hx-get="/html/calendar-heatmap" hx-trigger="load">{{ loading_spinner("Loading calendar...") }}</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-lg-6 mb-4">
-      <div class="card">
-        <div class="card-body">
-          <h5 class="card-title">Listening Streaks</h5>
-          <div hx-get="/html/streak-history" hx-trigger="load">{{ loading_spinner("Loading...") }}</div>
         </div>
       </div>
     </div>
@@ -104,55 +70,4 @@
       </div>
     </div>
   </div>
-
-  <div class="row">
-    <div class="col-12">
-      <div class="card">
-        <div class="card-body">
-          <ul class="nav nav-tabs mb-3" role="tablist">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-artists" type="button" role="tab">
-                Artists
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-albums" type="button" role="tab">Albums</button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-songs" type="button" role="tab">Songs</button>
-            </li>
-          </ul>
-          <div class="tab-content">
-            <div class="tab-pane show active" id="tab-artists" role="tabpanel">
-              <div hx-get="/html/top-artists" hx-trigger="load">{{ loading_spinner("Loading top artists...") }}</div>
-            </div>
-            <div class="tab-pane" id="tab-albums" role="tabpanel">
-              <div hx-get="/html/top-albums" hx-trigger="load">{{ loading_spinner("Loading top albums...") }}</div>
-            </div>
-            <div class="tab-pane" id="tab-songs" role="tabpanel">
-              <div hx-get="/html/top-songs" hx-trigger="load">{{ loading_spinner("Loading top songs...") }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-{% endblock %}
-
-{% block scripts %}
-  <script>
-// Load Plotly chart (only thing that needs custom JS)
-if (typeof Plotly !== 'undefined') {
-    fetch('/charts/listening-timeline')
-        .then(response => response.json())
-        .then(data => {
-            Plotly.newPlot('timeline-chart', data.data, data.layout, {responsive: true});
-        })
-        .catch(error => {
-            document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Error loading chart</p>';
-        });
-} else {
-    document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Plotly.js failed to load</p>';
-}
-  </script>
 {% endblock %}

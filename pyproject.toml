@@ -42,6 +42,7 @@ lytter-update = "lytter.update_db:main"
 
 [dependency-groups]
 dev = [
+  "httpx>=0.27.0",
   "types-requests>=2.32.0.20240914",
   "mypy>=1.8.0",
   "pydoclint>=0.4.1",

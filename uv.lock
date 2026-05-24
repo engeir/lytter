@@ -501,6 +501,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "djlint" },
+    { name = "httpx" },
     { name = "icecream" },
     { name = "mypy" },
     { name = "pydoclint" },
@@ -534,6 +535,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "djlint", specifier = ">=1.36.4" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "icecream", specifier = ">=2.1.3" },
     { name = "mypy", specifier = ">=1.8.0" },
     { name = "pydoclint", specifier = ">=0.4.1" },

@@ -1292,19 +1292,40 @@ async def top_songs_html(request: Request):
 
 
 @app.get("/charts/listening-timeline")
-async def listening_timeline():
-    """Generate listening timeline chart."""
+async def listening_timeline(
+    time_range: str = Query("year", alias="range", pattern="^(year|all)$"),
+) -> dict:
+    """Generate listening timeline chart.
+
+    Parameters
+    ----------
+    time_range : str
+        "year" (default) for past 365 days, "all" for full history.
+        Passed as query param ``range``.
+
+    Returns
+    -------
+    dict
+        Plotly figure as a dictionary with ``data`` and ``layout`` keys.
+    """
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
 
-        # Get daily scrobble counts for the last 365 days
-        cursor.execute("""
-            SELECT DATE(timestamp, 'unixepoch') as date, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE timestamp >= strftime('%s', 'now', '-365 days')
-            GROUP BY date
-            ORDER BY date ASC
-        """)
+        if time_range == "all":
+            cursor.execute("""
+                SELECT DATE(timestamp, 'unixepoch') as date, COUNT(*) as plays
+                FROM musiclibrary
+                GROUP BY date
+                ORDER BY date ASC
+            """)
+        else:
+            cursor.execute("""
+                SELECT DATE(timestamp, 'unixepoch') as date, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE timestamp >= strftime('%s', 'now', '-365 days')
+                GROUP BY date
+                ORDER BY date ASC
+            """)
         result = cursor.fetchall()
 
     df = pd.DataFrame(result, columns=["date", "plays"])
@@ -1369,7 +1390,7 @@ async def listening_timeline():
         initial_start = initial_end = None
 
     fig.update_layout(
-        title="Daily Listening Activity (Last 365 Days)",
+        title="Daily Listening Activity (All Time)" if time_range == "all" else "Daily Listening Activity (Last 365 Days)",
         xaxis_title="Date",
         yaxis_title="Number of Scrobbles",
         paper_bgcolor="#161b22",

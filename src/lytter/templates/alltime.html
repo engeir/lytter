@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros.html' import stat_card, loading_spinner %}
 
 {% block title %}All-Time Charts - Last.fm Stats{% endblock %}
 
@@ -6,7 +7,57 @@
   <div class="row mb-4">
     <div class="col-12">
       <h1 class="mb-1">All-Time Charts</h1>
-      <p class="text-muted mb-3">Top 50 by full listening history</p>
+      <p class="text-muted mb-3">Full listening history</p>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col">{{ stat_card("Total Scrobbles", total_scrobbles) }}</div>
+    <div class="col">{{ stat_card("Unique Artists", unique_artists) }}</div>
+    <div class="col">{{ stat_card("Unique Tracks", unique_tracks) }}</div>
+    <div class="col">{{ stat_card("Unique Albums", unique_albums) }}</div>
+    <div class="col">
+      {% if total_listening_time %}
+        {{ stat_card("Listening Time", total_listening_time) }}
+        {% if listening_time_known_tracks < listening_time_total_tracks %}
+          <small class="text-muted d-block text-center mt-1">{{ listening_time_known_tracks }}/{{ listening_time_total_tracks }} tracks</small>
+        {% endif %}
+      {% else %}
+        {{ stat_card('Listening Time', '—') }}
+      {% endif %}
+    </div>
+    <div class="col">{{ stat_card("Current Streak", current_streak ~ " days") }}</div>
+    <div class="col">{{ stat_card("Longest Streak", longest_streak ~ " days") }}</div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Listening Timeline</h5>
+          <div id="timeline-chart" style="height: 550px;">
+            <div class="d-flex justify-content-center align-items-center h-100">
+              <p class="text-muted">Loading chart...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Listening Streaks</h5>
+          <div hx-get="/html/streak-history" hx-trigger="load">{{ loading_spinner("Loading...") }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-12">
       <ul class="nav nav-tabs" id="item-type-tabs" role="tablist">
         <li class="nav-item" role="presentation">
           <button class="nav-link active" id="tab-artists" data-item-type="artists" type="button" role="tab">Artists</button>
@@ -70,6 +121,20 @@
 
 {% block scripts %}
   <script>
+  // Timeline chart (all-time)
+  if (typeof Plotly !== 'undefined') {
+      fetch('/charts/listening-timeline?range=all')
+          .then(response => response.json())
+          .then(data => {
+              Plotly.newPlot('timeline-chart', data.data, data.layout, {responsive: true});
+          })
+          .catch(() => {
+              document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Error loading chart</p>';
+          });
+  } else {
+      document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Plotly.js failed to load</p>';
+  }
+
   (function () {
     const SPINNER = '<div class="d-flex justify-content-center align-items-center" style="height:200px"><p class="text-muted">Loading...</p></div>';
     let currentType = 'artists';
@@ -104,7 +169,6 @@
     function attachAccumHover(chartId) {
       const el = document.getElementById(chartId);
       const n = el.data.length;
-      // Capture auto-assigned colors from Plotly's resolved internal state before any restyle
       const colors = el._fullData.map(t => t.line.color);
 
       function highlight(hoveredIndex) {
@@ -180,7 +244,6 @@
       loadTimeSpent(itemType);
     }
 
-    // Item type tabs
     document.querySelectorAll('#item-type-tabs .nav-link').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#item-type-tabs .nav-link').forEach(b => b.classList.remove('active'));
@@ -193,7 +256,6 @@
       });
     });
 
-    // Accumulated: scale toggle
     document.getElementById('scale-linear').addEventListener('click', () => {
       if (accumLogScale) {
         accumLogScale = false;
@@ -210,8 +272,6 @@
         Plotly.relayout('accumulated-chart', { 'yaxis.type': 'log' });
       }
     });
-
-    // Accumulated: time mode toggle
     document.getElementById('time-historical').addEventListener('click', () => {
       if (alignMode) {
         alignMode = false;
@@ -228,8 +288,6 @@
         loadAccum(currentType, true);
       }
     });
-
-    // Time spent: scale toggle
     document.getElementById('ts-scale-linear').addEventListener('click', () => {
       if (tsLogScale) {
         tsLogScale = false;

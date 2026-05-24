@@ -3918,7 +3918,9 @@ async def artist_loyalty_chart():
 @app.get("/all-time", response_class=HTMLResponse)
 async def all_time_page(request: Request):
     """All-time top charts page."""
-    return templates.TemplateResponse(request, "alltime.html", {})
+    with sqlite3.connect(DB_NAME) as conn:
+        stats = _get_dashboard_stats(conn)
+    return templates.TemplateResponse(request, "alltime.html", {**stats})
 
 
 @app.get("/charts/accumulated-listens")

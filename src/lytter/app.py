@@ -94,6 +94,11 @@ _VARIANT_RE = re.compile(
     re.IGNORECASE,
 )
 _DATE_DOT_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b")
+_FEAT_PAREN_RE = re.compile(
+    r"[\(\[]\s*(?:feat\.?|ft\.?|featuring)\s+([^\)\]]+)[\)\]]",
+    re.IGNORECASE,
+)
+_FEAT_BARE_RE = re.compile(r"\b(?:feat|ft|featuring)\.?(?=\s|$)", re.IGNORECASE)
 
 
 def normalize_text(text: str) -> str:
@@ -125,6 +130,62 @@ def normalize_text(text: str) -> str:
     return "".join(char for char in nfd if unicodedata.category(char) != "Mn")
 
 
+def normalize_name(s: str, field: str = "artist") -> str:
+    """Produce a normalized grouping key for an artist, album, or track name.
+
+    Parameters
+    ----------
+    s : str
+        Raw name string.
+    field : str
+        One of "artist", "album", "track". Track gets feat. normalization.
+
+    Returns
+    -------
+    str
+        Lowercase, diacritic-free, whitespace-collapsed key.
+    """
+    if not s:
+        return ""
+    # 1. NFC unicode normalization
+    s = unicodedata.normalize("NFC", s)
+    # 2. Whitespace
+    s = " ".join(s.split())
+    # 3. Lowercase
+    s = s.lower()
+    # 4. Strip diacritics
+    nfd = unicodedata.normalize("NFD", s)
+    s = "".join(c for c in nfd if unicodedata.category(c) != "Mn")
+    # 5. Feat. normalization — track only
+    if field == "track":
+        s = _FEAT_PAREN_RE.sub(r"feat. \1", s)
+        s = _FEAT_BARE_RE.sub("feat.", s)
+        s = " ".join(s.split())
+    # 6. Ampersand (with surrounding spaces only)
+    s = s.replace(" & ", " and ")
+    return s
+
+
+def backfill_keys(conn: sqlite3.Connection) -> None:
+    """Populate artist_key/album_key/track_key for rows where they are NULL."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, artist, album, track FROM musiclibrary WHERE artist_key IS NULL"
+    )
+    rows = cursor.fetchall()
+    for row_id, artist, album, track in rows:
+        cursor.execute(
+            "UPDATE musiclibrary SET artist_key=?, album_key=?, track_key=? WHERE id=?",
+            (
+                normalize_name(artist, "artist"),
+                normalize_name(album or "", "album"),
+                normalize_name(track, "track"),
+                row_id,
+            ),
+        )
+    conn.commit()
+
+
 def init_db():
     """Initialize database with table if it doesn't exist."""
     with sqlite3.connect(DB_NAME) as conn:
@@ -138,8 +199,29 @@ def init_db():
                 album_mbid TEXT,
                 track TEXT NOT NULL,
                 track_mbid TEXT,
-                timestamp INTEGER UNIQUE NOT NULL
+                timestamp INTEGER UNIQUE NOT NULL,
+                artist_key TEXT,
+                album_key TEXT,
+                track_key TEXT
             )
+        """)
+        # Migrate existing DBs that predate key columns
+        cursor.execute("PRAGMA table_info(musiclibrary)")
+        existing_cols = {row[1] for row in cursor.fetchall()}
+        for col in ("artist_key", "album_key", "track_key"):
+            if col not in existing_cols:
+                cursor.execute(f"ALTER TABLE musiclibrary ADD COLUMN {col} TEXT")  # noqa: S608
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_artist_key
+            ON musiclibrary(artist_key)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_artist_album_key
+            ON musiclibrary(artist_key, album_key)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_artist_track_key
+            ON musiclibrary(artist_key, track_key)
         """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS track_durations (
@@ -202,6 +284,7 @@ def init_db():
                 fetched_at INTEGER NOT NULL
             )
         """)
+        backfill_keys(conn)
 
 
 init_db()
@@ -617,24 +700,24 @@ def _get_dashboard_stats(conn: sqlite3.Connection) -> dict[str, object]:
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM musiclibrary")
     total_scrobbles = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(DISTINCT artist) FROM musiclibrary")
+    cursor.execute("SELECT COUNT(DISTINCT artist_key) FROM musiclibrary")
     unique_artists = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(DISTINCT track) FROM musiclibrary")
+    cursor.execute("SELECT COUNT(DISTINCT track_key) FROM musiclibrary")
     unique_tracks = cursor.fetchone()[0]
     cursor.execute(
-        "SELECT COUNT(DISTINCT album) FROM musiclibrary WHERE album != ''"
+        "SELECT COUNT(DISTINCT album_key) FROM musiclibrary WHERE album_key != ''"
     )
     unique_albums = cursor.fetchone()[0]
 
     cursor.execute("""
-        SELECT m.artist, m.track, COUNT(*) as plays, td.duration_ms
+        SELECT COUNT(*) as plays, MAX(td.duration_ms) as duration_ms
         FROM musiclibrary m
         LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
-        GROUP BY m.artist, m.track
+        GROUP BY m.artist_key, m.track_key
     """)
     rows = cursor.fetchall()
-    total_ms = sum(row[2] * row[3] for row in rows if row[3])
-    known_track_count = sum(1 for row in rows if row[3])
+    total_ms = sum(row[0] * row[1] for row in rows if row[1])
+    known_track_count = sum(1 for row in rows if row[1])
     total_track_count = len(rows)
     total_listening_time = format_listening_time(total_ms) if known_track_count > 0 else None
     current_streak, longest_streak = _compute_streaks(conn)
@@ -911,20 +994,27 @@ class GetScrobbles:
 
                     # Insert new scrobble
                     try:
+                        artist_raw = scrobble["artist"]["#text"]
+                        album_raw = scrobble["album"]["#text"]
+                        track_raw = scrobble["name"]
                         cursor.execute(
                             """
                             INSERT INTO musiclibrary
-                            (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp,
+                             artist_key, album_key, track_key)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                             (
-                                scrobble["artist"]["#text"],
+                                artist_raw,
                                 scrobble["artist"]["mbid"],
-                                scrobble["album"]["#text"],
+                                album_raw,
                                 scrobble["album"]["mbid"],
-                                scrobble["name"],
+                                track_raw,
                                 scrobble["mbid"],
                                 scrobble_timestamp,
+                                normalize_name(artist_raw, "artist"),
+                                normalize_name(album_raw, "album"),
+                                normalize_name(track_raw, "track"),
                             ),
                         )
                         conn.commit()
@@ -1221,9 +1311,17 @@ async def top_artists():
     """Get top artists data (JSON for backwards compatibility)."""
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT artist, COUNT(*) as plays FROM musiclibrary GROUP BY artist ORDER BY plays DESC LIMIT 50"
-        )
+        cursor.execute("""
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            GROUP BY m.artist_key
+            ORDER BY plays DESC
+            LIMIT 50
+        """)
         result = cursor.fetchall()
 
     artists = [{"artist": row[0], "plays": row[1]} for row in result]
@@ -1235,9 +1333,17 @@ async def top_artists_html(request: Request):
     """Get top artists as HTML fragment for HTMX."""
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT artist, COUNT(*) as plays FROM musiclibrary GROUP BY artist ORDER BY plays DESC LIMIT 50"
-        )
+        cursor.execute("""
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            GROUP BY m.artist_key
+            ORDER BY plays DESC
+            LIMIT 50
+        """)
         result = cursor.fetchall()
 
     artists = [{"artist": row[0], "plays": row[1]} for row in result]
@@ -1251,10 +1357,21 @@ async def top_albums_html(request: Request):
     """Get top albums as HTML fragment for HTMX."""
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT artist, album, COUNT(*) as plays FROM musiclibrary"
-            " WHERE album != '' GROUP BY artist, album ORDER BY plays DESC LIMIT 50"
-        )
+        cursor.execute("""
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.album FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                 GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) AS album,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            WHERE m.album_key != ''
+            GROUP BY m.artist_key, m.album_key
+            ORDER BY plays DESC
+            LIMIT 50
+        """)
         result = cursor.fetchall()
 
     albums = [{"artist": row[0], "album": row[1], "plays": row[2]} for row in result]
@@ -1268,10 +1385,20 @@ async def top_songs_html(request: Request):
     """Get top songs as HTML fragment for HTMX."""
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT artist, track, COUNT(*) as plays FROM musiclibrary"
-            " GROUP BY artist, track ORDER BY plays DESC LIMIT 50"
-        )
+        cursor.execute("""
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.track FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                 GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            GROUP BY m.artist_key, m.track_key
+            ORDER BY plays DESC
+            LIMIT 50
+        """)
         result = cursor.fetchall()
 
     songs = [{"artist": row[0], "track": row[1], "plays": row[2]} for row in result]
@@ -1434,10 +1561,14 @@ async def recent_stats():
 
         # Top 5 artists from past week
         cursor.execute("""
-            SELECT artist, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE timestamp >= strftime('%s', 'now', '-7 days')
-            GROUP BY artist
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            WHERE m.timestamp >= strftime('%s', 'now', '-7 days')
+            GROUP BY m.artist_key
             ORDER BY plays DESC
             LIMIT 5
         """)
@@ -1447,11 +1578,18 @@ async def recent_stats():
 
         # Top 5 albums from past week
         cursor.execute("""
-            SELECT artist, album, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE timestamp >= strftime('%s', 'now', '-7 days')
-                AND album != ''
-            GROUP BY artist, album
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.album FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                 GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) AS album,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            WHERE m.timestamp >= strftime('%s', 'now', '-7 days')
+                AND m.album_key != ''
+            GROUP BY m.artist_key, m.album_key
             ORDER BY plays DESC
             LIMIT 5
         """)
@@ -1462,10 +1600,17 @@ async def recent_stats():
 
         # Top 5 songs from past week
         cursor.execute("""
-            SELECT artist, track, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE timestamp >= strftime('%s', 'now', '-7 days')
-            GROUP BY artist, track
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.track FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                 GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            WHERE m.timestamp >= strftime('%s', 'now', '-7 days')
+            GROUP BY m.artist_key, m.track_key
             ORDER BY plays DESC
             LIMIT 5
         """)
@@ -1476,10 +1621,14 @@ async def recent_stats():
 
         # Top 5 artists from past month
         cursor.execute("""
-            SELECT artist, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE timestamp >= strftime('%s', 'now', '-30 days')
-            GROUP BY artist
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            WHERE m.timestamp >= strftime('%s', 'now', '-30 days')
+            GROUP BY m.artist_key
             ORDER BY plays DESC
             LIMIT 5
         """)
@@ -1489,11 +1638,18 @@ async def recent_stats():
 
         # Top 5 albums from past month
         cursor.execute("""
-            SELECT artist, album, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE timestamp >= strftime('%s', 'now', '-30 days')
-                AND album != ''
-            GROUP BY artist, album
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.album FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                 GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) AS album,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            WHERE m.timestamp >= strftime('%s', 'now', '-30 days')
+                AND m.album_key != ''
+            GROUP BY m.artist_key, m.album_key
             ORDER BY plays DESC
             LIMIT 5
         """)
@@ -1504,10 +1660,17 @@ async def recent_stats():
 
         # Top 5 songs from past month
         cursor.execute("""
-            SELECT artist, track, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE timestamp >= strftime('%s', 'now', '-30 days')
-            GROUP BY artist, track
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.track FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                 GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            WHERE m.timestamp >= strftime('%s', 'now', '-30 days')
+            GROUP BY m.artist_key, m.track_key
             ORDER BY plays DESC
             LIMIT 5
         """)

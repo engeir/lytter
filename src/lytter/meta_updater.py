@@ -22,27 +22,50 @@ def _get_artists(
 ) -> list[str]:
     cursor = conn.cursor()
     if force:
-        cursor.execute(
-            "SELECT artist, COUNT(*) as plays FROM musiclibrary GROUP BY artist ORDER BY plays DESC"
-        )
+        cursor.execute("""
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                COUNT(*) AS plays
+            FROM musiclibrary m
+            GROUP BY m.artist_key
+            ORDER BY plays DESC
+        """)
     elif retry_empty:
         # Never-attempted + previously returned empty tags
         cursor.execute("""
-            SELECT m.artist, COUNT(*) as plays
-            FROM musiclibrary m
-            LEFT JOIN artist_genres ag ON ag.artist = m.artist
+            SELECT canonical_artist, plays
+            FROM (
+                SELECT
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS canonical_artist,
+                    m.artist_key,
+                    COUNT(*) AS plays
+                FROM musiclibrary m
+                GROUP BY m.artist_key
+            ) sub
+            LEFT JOIN artist_genres ag ON ag.artist = sub.canonical_artist
             WHERE ag.artist IS NULL OR ag.tags = '[]'
-            GROUP BY m.artist
             ORDER BY plays DESC
         """)
     else:
         # Only artists with no entry in artist_genres at all
         cursor.execute("""
-            SELECT m.artist, COUNT(*) as plays
-            FROM musiclibrary m
-            LEFT JOIN artist_genres ag ON ag.artist = m.artist
+            SELECT canonical_artist, plays
+            FROM (
+                SELECT
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS canonical_artist,
+                    m.artist_key,
+                    COUNT(*) AS plays
+                FROM musiclibrary m
+                GROUP BY m.artist_key
+            ) sub
+            LEFT JOIN artist_genres ag ON ag.artist = sub.canonical_artist
             WHERE ag.artist IS NULL
-            GROUP BY m.artist
             ORDER BY plays DESC
         """)
     return [row[0] for row in cursor.fetchall()]

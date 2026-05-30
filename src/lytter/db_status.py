@@ -29,11 +29,11 @@ def main():
             oldest_timestamp = cursor.fetchone()[0]
 
             # Get unique artists
-            cursor.execute("SELECT COUNT(DISTINCT artist) FROM musiclibrary")
+            cursor.execute("SELECT COUNT(DISTINCT artist_key) FROM musiclibrary")
             unique_artists = cursor.fetchone()[0]
 
             # Get unique tracks
-            cursor.execute("SELECT COUNT(DISTINCT track) FROM musiclibrary")
+            cursor.execute("SELECT COUNT(DISTINCT track_key) FROM musiclibrary")
             unique_tracks = cursor.fetchone()[0]
 
         print("📊 Last.fm Database Status")

@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import lytter.app as app_module
-from lytter.app import app
+from lytter.app import app, normalize_name
 
 
 @pytest.fixture()
@@ -26,7 +26,10 @@ def test_db(tmp_path, monkeypatch):
                 album_mbid TEXT,
                 track TEXT NOT NULL,
                 track_mbid TEXT,
-                timestamp INTEGER UNIQUE NOT NULL
+                timestamp INTEGER UNIQUE NOT NULL,
+                artist_key TEXT,
+                album_key TEXT,
+                track_key TEXT
             )
         """)
         conn.execute("""
@@ -39,13 +42,23 @@ def test_db(tmp_path, monkeypatch):
             )
         """)
         now = int(time.time())
-        rows = [
+        raw_rows = [
             ("Radiohead", None, "OK Computer", None, "Paranoid Android", None, now - 120),
             ("Radiohead", None, "OK Computer", None, "Karma Police", None, now - 480),
             ("K.Flay", None, "Every Where Is Some Where", None, "Blood in the Cut", None, now - 720),
         ]
+        rows = [
+            r + (
+                normalize_name(r[0], "artist"),
+                normalize_name(r[2] or "", "album"),
+                normalize_name(r[4], "track"),
+            )
+            for r in raw_rows
+        ]
         conn.executemany(
-            "INSERT INTO musiclibrary (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO musiclibrary "
+            "(artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp, artist_key, album_key, track_key) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
             rows,
         )
         conn.execute(

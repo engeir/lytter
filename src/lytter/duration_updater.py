@@ -16,26 +16,61 @@ def _get_tracks(
 ) -> list[tuple[str, str, str | None]]:
     cursor = conn.cursor()
     if force:
-        cursor.execute(
-            "SELECT DISTINCT artist, track, MAX(track_mbid) FROM musiclibrary GROUP BY artist, track"
-        )
+        cursor.execute("""
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.track FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                 GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+                MAX(m.track_mbid) AS track_mbid
+            FROM musiclibrary m
+            GROUP BY m.artist_key, m.track_key
+        """)
     elif retry_failed:
         # Never-attempted + previously failed (NULL duration_ms)
         cursor.execute("""
-            SELECT DISTINCT m.artist, m.track, MAX(m.track_mbid)
-            FROM musiclibrary m
-            LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            SELECT canonical_artist, canonical_track, track_mbid
+            FROM (
+                SELECT
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS canonical_artist,
+                    (SELECT m2.track FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                     GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS canonical_track,
+                    m.artist_key,
+                    m.track_key,
+                    MAX(m.track_mbid) AS track_mbid
+                FROM musiclibrary m
+                GROUP BY m.artist_key, m.track_key
+            ) sub
+            LEFT JOIN track_durations td
+                ON td.artist = sub.canonical_artist AND td.track = sub.canonical_track
             WHERE td.artist IS NULL OR td.duration_ms IS NULL
-            GROUP BY m.artist, m.track
         """)
     else:
         # Only tracks with no entry in track_durations at all
         cursor.execute("""
-            SELECT DISTINCT m.artist, m.track, MAX(m.track_mbid)
-            FROM musiclibrary m
-            LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+            SELECT canonical_artist, canonical_track, track_mbid
+            FROM (
+                SELECT
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS canonical_artist,
+                    (SELECT m2.track FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                     GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS canonical_track,
+                    m.artist_key,
+                    m.track_key,
+                    MAX(m.track_mbid) AS track_mbid
+                FROM musiclibrary m
+                GROUP BY m.artist_key, m.track_key
+            ) sub
+            LEFT JOIN track_durations td
+                ON td.artist = sub.canonical_artist AND td.track = sub.canonical_track
             WHERE td.artist IS NULL
-            GROUP BY m.artist, m.track
         """)
     return [(row[0], row[1], row[2] or None) for row in cursor.fetchall()]
 

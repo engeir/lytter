@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import requests
 from dotenv import load_dotenv
 
-from lytter.app import DB_NAME
+from lytter.app import DB_NAME, normalize_name
 
 load_dotenv()
 
@@ -149,8 +149,9 @@ def fill_gaps(gaps, dry_run=True):
                             cursor.execute(
                                 """
                                 INSERT INTO musiclibrary
-                                (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp)
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp,
+                                 artist_key, album_key, track_key)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                                 (
                                     scrobble["artist"],
@@ -160,6 +161,9 @@ def fill_gaps(gaps, dry_run=True):
                                     scrobble["track"],
                                     scrobble["track_mbid"],
                                     scrobble["timestamp"],
+                                    normalize_name(scrobble["artist"], "artist"),
+                                    normalize_name(scrobble["album"] or "", "album"),
+                                    normalize_name(scrobble["track"], "track"),
                                 ),
                             )
                             conn.commit()

@@ -390,21 +390,28 @@ def find_similar_tracks(
     Excludes the current track itself. Sorted by play count descending.
     """
     cursor = conn.cursor()
+    artist_key = normalize_name(artist, "artist")
+    track_key_input = normalize_name(track, "track")
     cursor.execute(
         """
-        SELECT m.track, COUNT(*) as plays, td.duration_ms
+        SELECT
+            (SELECT m2.track FROM musiclibrary m2
+             WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+             GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+            COUNT(*) as plays,
+            MAX(td.duration_ms) as duration_ms
         FROM musiclibrary m
         LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
-        WHERE m.artist = ?
-        GROUP BY m.track
+        WHERE m.artist_key = ?
+        GROUP BY m.track_key
         """,
-        (artist,),
+        (artist_key,),
     )
     similar = []
     for other_track, plays, other_ms in cursor.fetchall():
-        if other_track == track:
+        if normalize_name(other_track, "track") == track_key_input:
             continue
-        score = fuzz.ratio(track, other_track)
+        score = fuzz.ratio(normalize_name(track, "track"), normalize_name(other_track, "track"))
         duration_match = (
             current_duration_ms is not None
             and other_ms is not None
@@ -1044,9 +1051,9 @@ class CurrentStats:
             rows = conn.execute(
                 """SELECT strftime('%Y-%m', timestamp, 'unixepoch') as month,
                           COUNT(*) as plays
-                   FROM musiclibrary WHERE artist = ?
+                   FROM musiclibrary WHERE artist_key = ?
                    GROUP BY month ORDER BY month""",
-                (artist,),
+                (normalize_name(artist, "artist"),),
             ).fetchall()
 
         if not rows:
@@ -1162,12 +1169,21 @@ async def index(request: Request):
     )
 
 
-@app.get("/artist/{artist_name}", response_class=HTMLResponse)
+@app.get("/artist/{artist_name:path}", response_class=HTMLResponse)
 async def artist_stats(
     request: Request, artist_name: str, background_tasks: BackgroundTasks
 ):
     """Artist statistics page."""
     stats = CurrentStats()
+
+    artist_key = normalize_name(artist_name, "artist")
+    with sqlite3.connect(DB_NAME) as conn:
+        _canonical = conn.execute(
+            "SELECT artist FROM musiclibrary WHERE artist_key = ? "
+            "GROUP BY artist ORDER BY COUNT(*) DESC LIMIT 1",
+            (artist_key,),
+        ).fetchone()
+    artist_name = _canonical[0] if _canonical else artist_name
 
     # Get listening history (already returns plain dict)
     history_json = json.dumps(stats.listening_history_db(artist_name))
@@ -1177,24 +1193,24 @@ async def artist_stats(
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT COUNT(*) FROM musiclibrary WHERE artist = ?", (artist_name,)
+            "SELECT COUNT(*) FROM musiclibrary WHERE artist_key = ?", (artist_key,)
         )
         total_plays = cursor.fetchone()[0]
 
         cursor.execute(
-            "SELECT COUNT(DISTINCT track) FROM musiclibrary WHERE artist = ?",
-            (artist_name,),
+            "SELECT COUNT(DISTINCT track_key) FROM musiclibrary WHERE artist_key = ?",
+            (artist_key,),
         )
         unique_tracks = cursor.fetchone()[0]
 
         cursor.execute(
-            "SELECT COUNT(DISTINCT album) FROM musiclibrary WHERE artist = ? AND album != ''",
-            (artist_name,),
+            "SELECT COUNT(DISTINCT album_key) FROM musiclibrary WHERE artist_key = ? AND album_key != ''",
+            (artist_key,),
         )
         unique_albums = cursor.fetchone()[0]
 
         first_heard_ts = cursor.execute(
-            "SELECT MIN(timestamp) FROM musiclibrary WHERE artist = ?", (artist_name,)
+            "SELECT MIN(timestamp) FROM musiclibrary WHERE artist_key = ?", (artist_key,)
         ).fetchone()[0]
         first_heard = (
             datetime.datetime.fromtimestamp(first_heard_ts).strftime("%-d %B %Y")
@@ -1207,10 +1223,10 @@ async def artist_stats(
             SELECT m.track, COUNT(*) as plays, MAX(m.track_mbid) as mbid, td.duration_ms
             FROM musiclibrary m
             LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
-            WHERE m.artist = ?
-            GROUP BY m.track
+            WHERE m.artist_key = ?
+            GROUP BY m.track_key
             """,
-            (artist_name,),
+            (artist_key,),
         )
         track_rows = cursor.fetchall()
 
@@ -1694,12 +1710,15 @@ async def on_this_day():
     """Artists listened to on today's date in previous years."""
     with sqlite3.connect(DB_NAME) as conn:
         rows = conn.execute(
-            """SELECT strftime('%Y', timestamp, 'unixepoch') as year,
-                      artist, COUNT(*) as plays
-               FROM musiclibrary
-               WHERE strftime('%m-%d', timestamp, 'unixepoch') = strftime('%m-%d', 'now')
-                 AND strftime('%Y', timestamp, 'unixepoch') != strftime('%Y', 'now')
-               GROUP BY year, artist
+            """SELECT strftime('%Y', m.timestamp, 'unixepoch') as year,
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                    COUNT(*) as plays
+               FROM musiclibrary m
+               WHERE strftime('%m-%d', m.timestamp, 'unixepoch') = strftime('%m-%d', 'now')
+                 AND strftime('%Y', m.timestamp, 'unixepoch') != strftime('%Y', 'now')
+               GROUP BY year, m.artist_key
                ORDER BY year DESC, plays DESC"""
         ).fetchall()
 
@@ -1812,8 +1831,14 @@ async def lost_artists_html():
     """Artists with 20+ plays not heard in the last 2 years."""
     with sqlite3.connect(DB_NAME) as conn:
         rows = conn.execute(
-            """SELECT artist, COUNT(*) as plays, MAX(timestamp) as last_ts
-               FROM musiclibrary GROUP BY artist
+            """SELECT
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                    COUNT(*) as plays,
+                    MAX(m.timestamp) as last_ts
+               FROM musiclibrary m
+               GROUP BY m.artist_key
                HAVING plays >= 20
                   AND last_ts < CAST(strftime('%s', 'now', '-2 years') AS INTEGER)
                ORDER BY plays DESC LIMIT 50"""
@@ -1981,14 +2006,18 @@ async def artist_top_songs(artist: str):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT track, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE artist = ?
-            GROUP BY track
+            SELECT
+                (SELECT m2.track FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                 GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+                COUNT(*) as plays
+            FROM musiclibrary m
+            WHERE m.artist_key = ?
+            GROUP BY m.track_key
             ORDER BY plays DESC
             LIMIT 100
         """,
-            (artist,),
+            (normalize_name(artist, "artist"),),
         )
         result = cursor.fetchall()
 
@@ -2003,14 +2032,18 @@ async def artist_top_albums(artist: str):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT album, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE artist = ? AND album != ''
-            GROUP BY album
+            SELECT
+                (SELECT m2.album FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                 GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) AS album,
+                COUNT(*) as plays
+            FROM musiclibrary m
+            WHERE m.artist_key = ? AND m.album_key != ''
+            GROUP BY m.artist_key, m.album_key
             ORDER BY plays DESC
             LIMIT 100
         """,
-            (artist,),
+            (normalize_name(artist, "artist"),),
         )
         result = cursor.fetchall()
 
@@ -2026,19 +2059,34 @@ async def album_stats(
     background_tasks: BackgroundTasks,
 ):
     """Album statistics page."""
+    artist_key = normalize_name(artist_name, "artist")
+    album_key = normalize_name(album_name, "album")
+    with sqlite3.connect(DB_NAME) as conn:
+        _canonical_artist = conn.execute(
+            "SELECT artist FROM musiclibrary WHERE artist_key = ? "
+            "GROUP BY artist ORDER BY COUNT(*) DESC LIMIT 1",
+            (artist_key,),
+        ).fetchone()
+        _canonical_album = conn.execute(
+            "SELECT album FROM musiclibrary WHERE artist_key = ? AND album_key = ? "
+            "GROUP BY album ORDER BY COUNT(*) DESC LIMIT 1",
+            (artist_key, album_key),
+        ).fetchone()
+    artist_name = _canonical_artist[0] if _canonical_artist else artist_name
+    album_name = _canonical_album[0] if _canonical_album else album_name
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
 
         # Get album stats
         cursor.execute(
-            "SELECT COUNT(*) FROM musiclibrary WHERE artist = ? AND album = ?",
-            (artist_name, album_name),
+            "SELECT COUNT(*) FROM musiclibrary WHERE artist_key = ? AND album_key = ?",
+            (artist_key, album_key),
         )
         total_plays = cursor.fetchone()[0]
 
         cursor.execute(
-            "SELECT COUNT(DISTINCT track) FROM musiclibrary WHERE artist = ? AND album = ?",
-            (artist_name, album_name),
+            "SELECT COUNT(DISTINCT track_key) FROM musiclibrary WHERE artist_key = ? AND album_key = ?",
+            (artist_key, album_key),
         )
         unique_tracks = cursor.fetchone()[0]
 
@@ -2048,10 +2096,10 @@ async def album_stats(
             SELECT m.track, COUNT(*) as plays, MAX(m.track_mbid) as mbid, td.duration_ms
             FROM musiclibrary m
             LEFT JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
-            WHERE m.artist = ? AND m.album = ?
-            GROUP BY m.track
+            WHERE m.artist_key = ? AND m.album_key = ?
+            GROUP BY m.track_key
             """,
-            (artist_name, album_name),
+            (artist_key, album_key),
         )
         track_rows = cursor.fetchall()
 
@@ -2061,8 +2109,8 @@ async def album_stats(
         )
 
         first_heard_ts = cursor.execute(
-            "SELECT MIN(timestamp) FROM musiclibrary WHERE artist = ? AND album = ?",
-            (artist_name, album_name),
+            "SELECT MIN(timestamp) FROM musiclibrary WHERE artist_key = ? AND album_key = ?",
+            (artist_key, album_key),
         ).fetchone()[0]
         first_heard = (
             datetime.datetime.fromtimestamp(first_heard_ts).strftime("%-d %B %Y")
@@ -2073,9 +2121,9 @@ async def album_stats(
         art_row = cursor.execute(
             """SELECT tm.album_art_url FROM track_metadata tm
                JOIN musiclibrary m ON m.artist = tm.artist AND m.track = tm.track
-               WHERE m.artist = ? AND m.album = ? AND tm.album_art_url IS NOT NULL
+               WHERE m.artist_key = ? AND m.album_key = ? AND tm.album_art_url IS NOT NULL
                LIMIT 1""",
-            (artist_name, album_name),
+            (artist_key, album_key),
         ).fetchone()
         album_art_url = art_row[0] if art_row else None
 
@@ -2104,10 +2152,10 @@ async def album_stats(
         cursor.execute(
             """
             SELECT timestamp FROM musiclibrary
-            WHERE artist = ? AND album = ?
+            WHERE artist_key = ? AND album_key = ?
             ORDER BY timestamp
         """,
-            (artist_name, album_name),
+            (artist_key, album_key),
         )
         timestamps = [row[0] for row in cursor.fetchall()]
 
@@ -2494,22 +2542,44 @@ async def search_all(q: str = "", limit: int = 5) -> dict:
         conn.create_function("NORM", 1, lambda s: normalize_text(s.lower()) if s else "")
 
         artist_rows = conn.execute(
-            """SELECT artist, COUNT(*) as plays FROM musiclibrary
-               WHERE NORM(artist) LIKE ? GROUP BY artist ORDER BY plays DESC LIMIT ?""",
+            """SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                COUNT(*) as plays
+               FROM musiclibrary m
+               WHERE NORM(m.artist) LIKE ?
+               GROUP BY m.artist_key ORDER BY plays DESC LIMIT ?""",
             (f"%{q_norm}%", limit),
         ).fetchall()
 
         album_rows = conn.execute(
-            """SELECT artist, album, COUNT(*) as plays FROM musiclibrary
-               WHERE album != '' AND NORM(album) LIKE ?
-               GROUP BY artist, album ORDER BY plays DESC LIMIT ?""",
+            """SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.album FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                 GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) AS album,
+                COUNT(*) as plays
+               FROM musiclibrary m
+               WHERE m.album_key != '' AND NORM(m.album) LIKE ?
+               GROUP BY m.artist_key, m.album_key ORDER BY plays DESC LIMIT ?""",
             (f"%{q_norm}%", limit),
         ).fetchall()
 
         track_rows = conn.execute(
-            """SELECT artist, track, COUNT(*) as plays FROM musiclibrary
-               WHERE NORM(track) LIKE ?
-               GROUP BY artist, track ORDER BY plays DESC LIMIT ?""",
+            """SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.track FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                 GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+                COUNT(*) as plays
+               FROM musiclibrary m
+               WHERE NORM(m.track) LIKE ?
+               GROUP BY m.artist_key, m.track_key ORDER BY plays DESC LIMIT ?""",
             (f"%{q_norm}%", limit),
         ).fetchall()
 
@@ -2552,10 +2622,17 @@ async def yearly_top_items(year: int, limit: int = 20):
         # Top songs
         cursor.execute(
             """
-            SELECT artist, track, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-            GROUP BY artist, track
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.track FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                 GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+                COUNT(*) as plays
+            FROM musiclibrary m
+            WHERE strftime('%Y', m.timestamp, 'unixepoch') = ?
+            GROUP BY m.artist_key, m.track_key
             ORDER BY plays DESC
             LIMIT ?
         """,
@@ -2569,11 +2646,18 @@ async def yearly_top_items(year: int, limit: int = 20):
         # Top albums
         cursor.execute(
             """
-            SELECT artist, album, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-                AND album != ''
-            GROUP BY artist, album
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                (SELECT m2.album FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                 GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) AS album,
+                COUNT(*) as plays
+            FROM musiclibrary m
+            WHERE strftime('%Y', m.timestamp, 'unixepoch') = ?
+                AND m.album_key != ''
+            GROUP BY m.artist_key, m.album_key
             ORDER BY plays DESC
             LIMIT ?
         """,
@@ -2587,10 +2671,14 @@ async def yearly_top_items(year: int, limit: int = 20):
         # Top artists
         cursor.execute(
             """
-            SELECT artist, COUNT(*) as plays
-            FROM musiclibrary
-            WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-            GROUP BY artist
+            SELECT
+                (SELECT m2.artist FROM musiclibrary m2
+                 WHERE m2.artist_key = m.artist_key
+                 GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                COUNT(*) as plays
+            FROM musiclibrary m
+            WHERE strftime('%Y', m.timestamp, 'unixepoch') = ?
+            GROUP BY m.artist_key
             ORDER BY plays DESC
             LIMIT ?
         """,
@@ -2616,10 +2704,17 @@ async def yearly_top_items_html(
         if item_type == "songs":
             cursor.execute(
                 """
-                SELECT artist, track, COUNT(*) as plays
-                FROM musiclibrary
-                WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-                GROUP BY artist, track
+                SELECT
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                    (SELECT m2.track FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                     GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) AS track,
+                    COUNT(*) as plays
+                FROM musiclibrary m
+                WHERE strftime('%Y', m.timestamp, 'unixepoch') = ?
+                GROUP BY m.artist_key, m.track_key
                 ORDER BY plays DESC
                 LIMIT ?
             """,
@@ -2632,11 +2727,18 @@ async def yearly_top_items_html(
         elif item_type == "albums":
             cursor.execute(
                 """
-                SELECT artist, album, COUNT(*) as plays
-                FROM musiclibrary
-                WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-                    AND album != ''
-                GROUP BY artist, album
+                SELECT
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                    (SELECT m2.album FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                     GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) AS album,
+                    COUNT(*) as plays
+                FROM musiclibrary m
+                WHERE strftime('%Y', m.timestamp, 'unixepoch') = ?
+                    AND m.album_key != ''
+                GROUP BY m.artist_key, m.album_key
                 ORDER BY plays DESC
                 LIMIT ?
             """,
@@ -2649,10 +2751,14 @@ async def yearly_top_items_html(
         elif item_type == "artists":
             cursor.execute(
                 """
-                SELECT artist, COUNT(*) as plays
-                FROM musiclibrary
-                WHERE strftime('%Y', timestamp, 'unixepoch') = ?
-                GROUP BY artist
+                SELECT
+                    (SELECT m2.artist FROM musiclibrary m2
+                     WHERE m2.artist_key = m.artist_key
+                     GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) AS artist,
+                    COUNT(*) as plays
+                FROM musiclibrary m
+                WHERE strftime('%Y', m.timestamp, 'unixepoch') = ?
+                GROUP BY m.artist_key
                 ORDER BY plays DESC
                 LIMIT ?
             """,

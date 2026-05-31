@@ -30,21 +30,29 @@
     <div class="col">{{ stat_card("Longest Streak", longest_streak ~ " days") }}</div>
   </div>
 
+  <!-- Listening Timeline -->
   <div class="row mb-4">
     <div class="col-12">
       <div class="card">
         <div class="card-body">
-          <h5 class="card-title">Listening Timeline</h5>
-          <div id="timeline-chart" style="height: 550px;">
-            <div class="d-flex justify-content-center align-items-center h-100">
-              <p class="text-muted">Loading chart...</p>
+          <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+            <h5 class="card-title mb-0">Listening Timeline</h5>
+            <div class="btn-group btn-group-sm" id="timeline-range-btns" role="group" aria-label="Timeline range">
+              <button class="btn btn-outline-secondary" data-days="30">1m</button>
+              <button class="btn btn-outline-secondary active" data-days="90">3m</button>
+              <button class="btn btn-outline-secondary" data-days="365">1y</button>
+              <button class="btn btn-outline-secondary" data-days="0">All</button>
             </div>
+          </div>
+          <div class="chart-tall" style="">
+            <canvas id="timeline-chart"></canvas>
           </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Listening Streaks -->
   <div class="row mb-4">
     <div class="col-12">
       <div class="card">
@@ -56,22 +64,24 @@
     </div>
   </div>
 
+  <!-- Item-type tabs shared by the two charts below -->
   <div class="row mb-4">
     <div class="col-12">
       <ul class="nav nav-tabs" id="item-type-tabs" role="tablist">
         <li class="nav-item" role="presentation">
-          <button class="nav-link active" id="tab-artists" data-item-type="artists" type="button" role="tab">Artists</button>
+          <button class="nav-link active" data-item-type="artists" type="button" role="tab">Artists</button>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" id="tab-albums" data-item-type="albums" type="button" role="tab">Albums</button>
+          <button class="nav-link" data-item-type="albums" type="button" role="tab">Albums</button>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" id="tab-songs" data-item-type="songs" type="button" role="tab">Songs</button>
+          <button class="nav-link" data-item-type="songs" type="button" role="tab">Songs</button>
         </li>
       </ul>
     </div>
   </div>
 
+  <!-- Accumulated Listen Count -->
   <div class="row mb-4">
     <div class="col-12">
       <div class="card">
@@ -79,7 +89,7 @@
           <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
             <div>
               <h5 class="card-title mb-0">Accumulated Listen Count</h5>
-              <p class="text-muted small mb-0">Cumulative plays — top 10 visible, toggle others in legend</p>
+              <p class="text-muted small mb-0">Cumulative plays — top 10</p>
             </div>
             <div class="d-flex gap-2">
               <div class="btn-group btn-group-sm" role="group" aria-label="Y-axis scale">
@@ -92,12 +102,15 @@
               </div>
             </div>
           </div>
-          <div id="accumulated-chart" style="height: 500px;"></div>
+          <div class="chart-medium" style="">
+            <canvas id="accumulated-chart"></canvas>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Time Spent -->
   <div class="row mb-4">
     <div class="col-12">
       <div class="card">
@@ -112,12 +125,15 @@
               <button type="button" class="btn btn-outline-secondary" id="ts-scale-log">Log</button>
             </div>
           </div>
-          <div id="time-spent-chart"></div>
+          <div id="time-spent-inner" style="">
+            <canvas id="time-spent-chart"></canvas>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Top 50 lists -->
   <div class="row">
     <div class="col-12">
       <div class="card">
@@ -154,191 +170,347 @@
 
 {% block scripts %}
   <script>
-  // Timeline chart (all-time)
-  if (typeof Plotly !== 'undefined') {
-      fetch('/charts/listening-timeline?range=all')
-          .then(response => response.json())
-          .then(data => {
-              Plotly.newPlot('timeline-chart', data.data, data.layout, {responsive: true});
-          })
-          .catch(() => {
-              document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Error loading chart</p>';
-          });
-  } else {
-      document.getElementById('timeline-chart').innerHTML = '<p class="text-muted">Plotly.js failed to load</p>';
+(function () {
+  // ── Shared style constants ─────────────────────────────────────────────
+  const PALETTE = [
+    '#58a6ff','#f78166','#3fb950','#d2a8ff','#ffa657',
+    '#79c0ff','#ff7b72','#7ee787','#e3b341','#cae8ff',
+  ];
+  const GRID   = '#30363d';
+  const TEXT   = '#f0f6fc';
+  const BG     = '#0d1117';
+
+  const baseScale = { grid: { color: GRID }, ticks: { color: TEXT } };
+  const baseTip   = { backgroundColor: BG, borderColor: GRID, borderWidth: 1, titleColor: TEXT, bodyColor: TEXT };
+
+  // ── State ──────────────────────────────────────────────────────────────
+  let currentType   = 'artists';
+  let alignMode     = false;
+  let accumLog      = false;
+  let tsLog         = false;
+
+  const accumCache = {};
+  const tsCache    = {};
+
+  let timelineChart = null;
+  let timelineData  = null;
+  let accumChart    = null;
+  let tsChart       = null;
+
+  // ── Timeline ───────────────────────────────────────────────────────────
+  fetch('/data/timeline?range=all')
+    .then(r => r.json())
+    .then(data => {
+      timelineData = data;
+      const ctx = document.getElementById('timeline-chart').getContext('2d');
+      timelineChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.labels,
+          datasets: [
+            {
+              type: 'bar',
+              label: 'Daily plays',
+              data: data.plays,
+              backgroundColor: 'rgba(31,111,235,0.55)',
+              borderWidth: 0,
+              order: 2,
+            },
+            {
+              type: 'line',
+              label: '7-day avg',
+              data: data.rolling,
+              borderColor: '#f78166',
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.3,
+              fill: false,
+              order: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: TEXT, boxWidth: 12 } },
+            tooltip: baseTip,
+          },
+          scales: {
+            x: {
+              ...baseScale,
+              ticks: {
+                color: TEXT,
+                maxTicksLimit: 8,
+                maxRotation: 45,
+                autoSkip: true,
+                callback: function(val) {
+                  const lbl = this.getLabelForValue(val);
+                  if (!lbl || typeof lbl !== 'string') return lbl;
+                  const [year, month, day] = lbl.split('-');
+                  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                  return `${parseInt(day)} ${M[parseInt(month)-1]} '${year.slice(2)}`;
+                },
+              },
+            },
+            y: { ...baseScale, beginAtZero: true },
+          },
+        },
+      });
+      setTimelineRange(90);  // default: last 3 months
+    })
+    .catch(() => {
+      const el = document.getElementById('timeline-chart').parentElement;
+      el.innerHTML = '<p class="text-muted p-3">Error loading chart</p>';
+    });
+
+  function setTimelineRange(days) {
+    if (!timelineChart || !timelineData) return;
+    const labels = timelineData.labels;
+    if (days === 0) {
+      timelineChart.options.scales.x.min = undefined;
+      timelineChart.options.scales.x.max = undefined;
+    } else {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const cutStr = cutoff.toISOString().split('T')[0];
+      let startIdx = 0;
+      for (let i = 0; i < labels.length; i++) {
+        if (labels[i] >= cutStr) { startIdx = i; break; }
+      }
+      timelineChart.options.scales.x.min = labels[startIdx];
+      timelineChart.options.scales.x.max = labels[labels.length - 1];
+    }
+    timelineChart.update();
   }
 
-  (function () {
-    const SPINNER = '<div class="d-flex justify-content-center align-items-center" style="height:200px"><p class="text-muted">Loading...</p></div>';
-    let currentType = 'artists';
-    let alignMode = false;
-    let accumLogScale = false;
-    let tsLogScale = false;
-    const accumCache = {};
-    const timeCache = {};
-    const config = { responsive: true };
+  document.getElementById('timeline-range-btns').addEventListener('click', e => {
+    const btn = e.target.closest('[data-days]');
+    if (!btn) return;
+    document.querySelectorAll('#timeline-range-btns [data-days]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setTimelineRange(parseInt(btn.dataset.days, 10));
+  });
 
-    function setLoading(id) {
-      const el = document.getElementById(id);
-      if (el._plotly) { Plotly.purge(el); el._plotly = false; }
-      el.innerHTML = SPINNER;
-    }
+  // ── Accumulated listens ────────────────────────────────────────────────
+  function fetchAccum(type, align) {
+    const key = type + '_' + align;
+    if (accumCache[key]) return Promise.resolve(accumCache[key]);
+    return fetch(`/data/accumulated-listens?item_type=${type}&limit=10&align=${align}`)
+      .then(r => r.json())
+      .then(d => { accumCache[key] = d; return d; });
+  }
 
-    function fetchAccum(itemType, align) {
-      const key = itemType + '_' + align;
-      if (accumCache[key]) return Promise.resolve(accumCache[key]);
-      return fetch('/charts/accumulated-listens?item_type=' + itemType + '&limit=50&align=' + align)
-        .then(r => r.json())
-        .then(data => { accumCache[key] = data; return data; });
-    }
+  function renderAccum(data) {
+    if (accumChart) { accumChart.destroy(); accumChart = null; }
 
-    function fetchTimeSpent(itemType) {
-      if (timeCache[itemType]) return Promise.resolve(timeCache[itemType]);
-      return fetch('/charts/time-spent?item_type=' + itemType + '&limit=50')
-        .then(r => r.json())
-        .then(data => { timeCache[itemType] = data; return data; });
-    }
+    const isAligned = data.aligned;
+    const datasets = data.datasets.map((ds, i) => ({
+      label: ds.label,
+      data: ds.data,
+      borderColor: PALETTE[i % PALETTE.length],
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.1,
+    }));
 
-    function attachAccumHover(chartId) {
-      const el = document.getElementById(chartId);
-      const n = el.data.length;
-      const colors = el._fullData.map(t => t.line.color);
-
-      function highlight(hoveredIndex) {
-        const update = { 'line.width': [], opacity: [], 'line.color': [] };
-        for (let i = 0; i < n; i++) {
-          update['line.width'].push(i === hoveredIndex ? 5 : 1);
-          update.opacity.push(i === hoveredIndex ? 1 : 0.15);
-          update['line.color'].push(colors[i]);
+    const xScale = isAligned
+      ? {
+          ...baseScale,
+          type: 'linear',
+          title: { display: true, text: 'Months since first listen', color: TEXT },
         }
-        Plotly.restyle(chartId, update);
+      : {
+          ...baseScale,
+          ticks: {
+            color: TEXT,
+            maxTicksLimit: 10,
+            maxRotation: 45,
+            callback: function(val) {
+              const lbl = this.getLabelForValue(val);
+              if (!lbl || typeof lbl !== 'string') return lbl;
+              const [year, month] = lbl.split('-');
+              // Show full year for Jan, compact "'YY-MM" otherwise
+              return month === '01' ? year : `'${year.slice(2)}-${month}`;
+            },
+          },
+        };
+
+    accumChart = new Chart(
+      document.getElementById('accumulated-chart').getContext('2d'),
+      {
+        type: 'line',
+        data: { labels: isAligned ? undefined : data.months, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'nearest', intersect: false },
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: TEXT, boxWidth: 12, padding: 10 },
+            },
+            tooltip: baseTip,
+          },
+          scales: {
+            x: xScale,
+            y: {
+              ...baseScale,
+              type: accumLog ? 'logarithmic' : 'linear',
+              beginAtZero: !accumLog,
+              title: { display: true, text: 'Cumulative plays', color: TEXT },
+            },
+          },
+        },
       }
+    );
+  }
 
-      function resetAll() {
-        Plotly.restyle(chartId, {
-          'line.width': Array(n).fill(2),
-          opacity: Array(n).fill(1),
-          'line.color': colors
-        });
-      }
-
-      el.on('plotly_hover', evt => highlight(evt.points[0].curveNumber));
-      el.on('plotly_unhover', resetAll);
-
-      setTimeout(() => {
-        el.querySelectorAll('.legend .traces .legendtoggle').forEach((item, i) => {
-          item.addEventListener('mouseenter', () => highlight(i));
-          item.addEventListener('mouseleave', resetAll);
-        });
-      }, 100);
-    }
-
-    function renderAccum(data) {
-      const d = JSON.parse(JSON.stringify(data));
-      d.layout.yaxis = Object.assign({}, d.layout.yaxis, { type: accumLogScale ? 'log' : 'linear' });
-      const el = document.getElementById('accumulated-chart');
-      el.innerHTML = '';
-      Plotly.newPlot('accumulated-chart', d.data, d.layout, config);
-      el._plotly = true;
-      attachAccumHover('accumulated-chart');
-    }
-
-    function renderTimeSpent(data) {
-      const d = JSON.parse(JSON.stringify(data));
-      d.layout.xaxis = Object.assign({}, d.layout.xaxis, { type: tsLogScale ? 'log' : 'linear' });
-      const el = document.getElementById('time-spent-chart');
-      el.innerHTML = '';
-      Plotly.newPlot('time-spent-chart', d.data, d.layout, config);
-      el._plotly = true;
-    }
-
-    function loadAccum(itemType, align) {
-      setLoading('accumulated-chart');
-      fetchAccum(itemType, align)
-        .then(renderAccum)
-        .catch(() => {
-          document.getElementById('accumulated-chart').innerHTML =
-            '<p class="text-muted p-3">Error loading chart</p>';
-        });
-    }
-
-    function loadTimeSpent(itemType) {
-      setLoading('time-spent-chart');
-      fetchTimeSpent(itemType)
-        .then(renderTimeSpent)
-        .catch(() => {
-          document.getElementById('time-spent-chart').innerHTML =
-            '<p class="text-muted p-3">Error loading chart</p>';
-        });
-    }
-
-    function loadAll(itemType) {
-      loadAccum(itemType, alignMode);
-      loadTimeSpent(itemType);
-    }
-
-    document.querySelectorAll('#item-type-tabs .nav-link').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#item-type-tabs .nav-link').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const newType = btn.dataset.itemType;
-        if (newType !== currentType) {
-          currentType = newType;
-          loadAll(newType);
-        }
+  function loadAccum(type, align) {
+    fetchAccum(type, align)
+      .then(renderAccum)
+      .catch(() => {
+        const el = document.getElementById('accumulated-chart').parentElement;
+        el.innerHTML = '<p class="text-muted p-3">Error loading chart</p>';
       });
-    });
+  }
 
-    document.getElementById('scale-linear').addEventListener('click', () => {
-      if (accumLogScale) {
-        accumLogScale = false;
-        document.getElementById('scale-linear').classList.add('active');
-        document.getElementById('scale-log').classList.remove('active');
-        Plotly.relayout('accumulated-chart', { 'yaxis.type': 'linear' });
-      }
-    });
-    document.getElementById('scale-log').addEventListener('click', () => {
-      if (!accumLogScale) {
-        accumLogScale = true;
-        document.getElementById('scale-log').classList.add('active');
-        document.getElementById('scale-linear').classList.remove('active');
-        Plotly.relayout('accumulated-chart', { 'yaxis.type': 'log' });
-      }
-    });
-    document.getElementById('time-historical').addEventListener('click', () => {
-      if (alignMode) {
-        alignMode = false;
-        document.getElementById('time-historical').classList.add('active');
-        document.getElementById('time-aligned').classList.remove('active');
-        loadAccum(currentType, false);
-      }
-    });
-    document.getElementById('time-aligned').addEventListener('click', () => {
-      if (!alignMode) {
-        alignMode = true;
-        document.getElementById('time-aligned').classList.add('active');
-        document.getElementById('time-historical').classList.remove('active');
-        loadAccum(currentType, true);
-      }
-    });
-    document.getElementById('ts-scale-linear').addEventListener('click', () => {
-      if (tsLogScale) {
-        tsLogScale = false;
-        document.getElementById('ts-scale-linear').classList.add('active');
-        document.getElementById('ts-scale-log').classList.remove('active');
-        Plotly.relayout('time-spent-chart', { 'xaxis.type': 'linear' });
-      }
-    });
-    document.getElementById('ts-scale-log').addEventListener('click', () => {
-      if (!tsLogScale) {
-        tsLogScale = true;
-        document.getElementById('ts-scale-log').classList.add('active');
-        document.getElementById('ts-scale-linear').classList.remove('active');
-        Plotly.relayout('time-spent-chart', { 'xaxis.type': 'log' });
-      }
-    });
+  // ── Time spent ─────────────────────────────────────────────────────────
+  function fetchTs(type) {
+    if (tsCache[type]) return Promise.resolve(tsCache[type]);
+    return fetch(`/data/time-spent?item_type=${type}&limit=50`)
+      .then(r => r.json())
+      .then(d => { tsCache[type] = d; return d; });
+  }
 
-    loadAll('artists');
-  })();
+  function renderTs(data) {
+    if (tsChart) { tsChart.destroy(); tsChart = null; }
+
+    // Set inner div height so all rows fit without Chart.js truncating
+    const n = data.labels.length;
+    document.getElementById('time-spent-inner').style.height = Math.max(300, n * 24 + 60) + 'px';
+
+    tsChart = new Chart(
+      document.getElementById('time-spent-chart').getContext('2d'),
+      {
+        type: 'bar',
+        data: {
+          labels: data.labels,
+          datasets: [{
+            label: 'Hours',
+            data: data.values,
+            backgroundColor: 'rgba(31,111,235,0.75)',
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              ...baseTip,
+              callbacks: { label: ctx => ' ' + data.hover[ctx.dataIndex] },
+            },
+          },
+          scales: {
+            x: {
+              ...baseScale,
+              type: tsLog ? 'logarithmic' : 'linear',
+              title: { display: true, text: 'Hours', color: TEXT },
+            },
+            y: {
+              ...baseScale,
+              ticks: {
+                color: TEXT,
+                autoSkip: false,
+                callback: (val, i) => {
+                  const lbl = data.labels[i] || '';
+                  return lbl.length > 32 ? lbl.slice(0, 30) + '…' : lbl;
+                },
+              },
+            },
+          },
+        },
+      }
+    );
+  }
+
+  function loadTs(type) {
+    fetchTs(type)
+      .then(renderTs)
+      .catch(() => {
+        document.getElementById('time-spent-inner').innerHTML =
+          '<p class="text-muted p-3">Error loading chart</p>';
+      });
+  }
+
+  function loadAll(type) {
+    loadAccum(type, alignMode);
+    loadTs(type);
+  }
+
+  // ── Tab switching ──────────────────────────────────────────────────────
+  document.querySelectorAll('#item-type-tabs .nav-link').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#item-type-tabs .nav-link').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const type = btn.dataset.itemType;
+      if (type !== currentType) { currentType = type; loadAll(type); }
+    });
+  });
+
+  // ── Scale toggles ──────────────────────────────────────────────────────
+  document.getElementById('scale-linear').addEventListener('click', () => {
+    if (!accumLog) return;
+    accumLog = false;
+    document.getElementById('scale-linear').classList.add('active');
+    document.getElementById('scale-log').classList.remove('active');
+    if (accumChart) { accumChart.options.scales.y.type = 'linear'; accumChart.options.scales.y.beginAtZero = true; accumChart.update(); }
+  });
+  document.getElementById('scale-log').addEventListener('click', () => {
+    if (accumLog) return;
+    accumLog = true;
+    document.getElementById('scale-log').classList.add('active');
+    document.getElementById('scale-linear').classList.remove('active');
+    if (accumChart) { accumChart.options.scales.y.type = 'logarithmic'; accumChart.options.scales.y.beginAtZero = false; accumChart.update(); }
+  });
+
+  document.getElementById('time-historical').addEventListener('click', () => {
+    if (!alignMode) return;
+    alignMode = false;
+    document.getElementById('time-historical').classList.add('active');
+    document.getElementById('time-aligned').classList.remove('active');
+    loadAccum(currentType, false);
+  });
+  document.getElementById('time-aligned').addEventListener('click', () => {
+    if (alignMode) return;
+    alignMode = true;
+    document.getElementById('time-aligned').classList.add('active');
+    document.getElementById('time-historical').classList.remove('active');
+    loadAccum(currentType, true);
+  });
+
+  document.getElementById('ts-scale-linear').addEventListener('click', () => {
+    if (!tsLog) return;
+    tsLog = false;
+    document.getElementById('ts-scale-linear').classList.add('active');
+    document.getElementById('ts-scale-log').classList.remove('active');
+    if (tsChart) { tsChart.options.scales.x.type = 'linear'; tsChart.update(); }
+  });
+  document.getElementById('ts-scale-log').addEventListener('click', () => {
+    if (tsLog) return;
+    tsLog = true;
+    document.getElementById('ts-scale-log').classList.add('active');
+    document.getElementById('ts-scale-linear').classList.remove('active');
+    if (tsChart) { tsChart.options.scales.x.type = 'logarithmic'; tsChart.update(); }
+  });
+
+  // ── Initial load ───────────────────────────────────────────────────────
+  loadAll('artists');
+})();
   </script>
 {% endblock %}

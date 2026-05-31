@@ -4181,6 +4181,243 @@ async def all_time_page(request: Request):
     return templates.TemplateResponse(request, "alltime.html", {**stats})
 
 
+# ---------------------------------------------------------------------------
+# Chart.js data endpoints (simple JSON, no Plotly dependency)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/data/timeline")
+async def data_timeline(
+    time_range: str = Query("all", alias="range", pattern="^(year|all)$"),
+) -> dict:
+    """Daily play counts and 7-day rolling average for Chart.js timeline.
+
+    Parameters
+    ----------
+    time_range : str
+        ``"all"`` for full history, ``"year"`` for last 365 days.
+
+    Returns
+    -------
+    dict
+        Keys: ``labels`` (date strings), ``plays`` (int list), ``rolling``
+        (float list, 7-day centred rolling mean).
+    """
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        if time_range == "all":
+            cursor.execute("""
+                SELECT DATE(timestamp, 'unixepoch') as date, COUNT(*) as plays
+                FROM musiclibrary
+                GROUP BY date ORDER BY date ASC
+            """)
+        else:
+            cursor.execute("""
+                SELECT DATE(timestamp, 'unixepoch') as date, COUNT(*) as plays
+                FROM musiclibrary
+                WHERE timestamp >= strftime('%s', 'now', '-365 days')
+                GROUP BY date ORDER BY date ASC
+            """)
+        result = cursor.fetchall()
+
+    if not result:
+        return {"labels": [], "plays": [], "rolling": []}
+
+    df = pd.DataFrame(result, columns=["date", "plays"])
+    df["rolling7"] = df["plays"].rolling(7, center=True, min_periods=1).mean()
+    return {
+        "labels": df["date"].tolist(),
+        "plays": df["plays"].tolist(),
+        "rolling": df["rolling7"].round(1).tolist(),
+    }
+
+
+@app.get("/data/accumulated-listens")
+async def data_accumulated_listens(
+    item_type: str = "artists", limit: int = 10, align: bool = False
+) -> dict:
+    """Cumulative listen count data for top N items, for Chart.js.
+
+    Parameters
+    ----------
+    item_type : str
+        One of ``"artists"``, ``"albums"``, ``"songs"``.
+    limit : int
+        Number of top items to include.
+    align : bool
+        If True, each dataset x-axis starts at 0 (months since first play).
+
+    Returns
+    -------
+    dict
+        Keys: ``months`` (list or None), ``datasets`` (list of label+data),
+        ``aligned`` (bool).
+    """
+    with sqlite3.connect(DB_NAME) as conn:
+        if item_type == "artists":
+            rows = conn.execute(
+                """SELECT strftime('%Y-%m', m.timestamp, 'unixepoch') as month,
+                          (SELECT m2.artist FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key
+                           GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) as label,
+                          COUNT(*) as plays
+                   FROM musiclibrary m
+                   WHERE m.artist_key IN (
+                       SELECT artist_key FROM musiclibrary
+                       GROUP BY artist_key ORDER BY COUNT(*) DESC LIMIT ?
+                   )
+                   GROUP BY month, m.artist_key ORDER BY label, month""",
+                (limit,),
+            ).fetchall()
+        elif item_type == "albums":
+            rows = conn.execute(
+                """SELECT strftime('%Y-%m', m.timestamp, 'unixepoch') as month,
+                          (SELECT m2.artist FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key
+                           GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1)
+                          || ' — ' ||
+                          (SELECT m2.album FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                           GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) as label,
+                          COUNT(*) as plays
+                   FROM musiclibrary m
+                   WHERE m.album_key != ''
+                     AND (m.artist_key || '|||' || m.album_key) IN (
+                         SELECT artist_key || '|||' || album_key FROM musiclibrary
+                         WHERE album_key != ''
+                         GROUP BY artist_key, album_key ORDER BY COUNT(*) DESC LIMIT ?
+                     )
+                   GROUP BY month, m.artist_key, m.album_key ORDER BY label, month""",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT strftime('%Y-%m', m.timestamp, 'unixepoch') as month,
+                          (SELECT m2.artist FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key
+                           GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1)
+                          || ' — ' ||
+                          (SELECT m2.track FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                           GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) as label,
+                          COUNT(*) as plays
+                   FROM musiclibrary m
+                   WHERE (m.artist_key || '|||' || m.track_key) IN (
+                       SELECT artist_key || '|||' || track_key FROM musiclibrary
+                       GROUP BY artist_key, track_key ORDER BY COUNT(*) DESC LIMIT ?
+                   )
+                   GROUP BY month, m.artist_key, m.track_key ORDER BY label, month""",
+                (limit,),
+            ).fetchall()
+
+    if not rows:
+        return {"months": [], "datasets": [], "aligned": align}
+
+    df = pd.DataFrame(rows, columns=["month", "label", "plays"])
+    pivot = df.pivot(index="month", columns="label", values="plays")
+    pivot = pivot.reindex(sorted(pivot.index)).fillna(0)
+    cumsum = pivot.cumsum()
+    final_order = cumsum.iloc[-1].sort_values(ascending=False)
+    cumsum = cumsum[final_order.index]
+
+    if align:
+        datasets = []
+        for label in cumsum.columns:
+            raw = pivot[label]
+            first_pos = int((raw > 0).values.argmax()) if (raw > 0).any() else 0
+            trimmed = cumsum[label].iloc[first_pos:]
+            datasets.append({
+                "label": label,
+                "data": [{"x": i, "y": float(v)} for i, v in enumerate(trimmed.tolist())],
+            })
+        return {"months": None, "datasets": datasets, "aligned": True}
+
+    return {
+        "months": cumsum.index.tolist(),
+        "datasets": [
+            {"label": col, "data": [float(v) for v in cumsum[col].tolist()]}
+            for col in cumsum.columns
+        ],
+        "aligned": False,
+    }
+
+
+@app.get("/data/time-spent")
+async def data_time_spent_chartjs(item_type: str = "artists", limit: int = 50) -> dict:
+    """Total listening time data for top N items, for Chart.js horizontal bar.
+
+    Parameters
+    ----------
+    item_type : str
+        One of ``"artists"``, ``"albums"``, ``"songs"``.
+    limit : int
+        Number of items to return.
+
+    Returns
+    -------
+    dict
+        Keys: ``labels`` (reversed, bottom-to-top), ``values`` (hours),
+        ``hover`` (formatted strings).
+    """
+    with sqlite3.connect(DB_NAME) as conn:
+        if item_type == "artists":
+            rows = conn.execute(
+                """SELECT (SELECT m2.artist FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key
+                           GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1) as label,
+                          SUM(td.duration_ms) as total_ms
+                   FROM musiclibrary m
+                   JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+                   WHERE td.duration_ms IS NOT NULL
+                   GROUP BY m.artist_key ORDER BY total_ms DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        elif item_type == "albums":
+            rows = conn.execute(
+                """SELECT (SELECT m2.artist FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key
+                           GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1)
+                          || ' — ' ||
+                          (SELECT m2.album FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key AND m2.album_key = m.album_key
+                           GROUP BY m2.album ORDER BY COUNT(*) DESC LIMIT 1) as label,
+                          SUM(td.duration_ms) as total_ms
+                   FROM musiclibrary m
+                   JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+                   WHERE td.duration_ms IS NOT NULL AND m.album_key != ''
+                   GROUP BY m.artist_key, m.album_key ORDER BY total_ms DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT (SELECT m2.artist FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key
+                           GROUP BY m2.artist ORDER BY COUNT(*) DESC LIMIT 1)
+                          || ' — ' ||
+                          (SELECT m2.track FROM musiclibrary m2
+                           WHERE m2.artist_key = m.artist_key AND m2.track_key = m.track_key
+                           GROUP BY m2.track ORDER BY COUNT(*) DESC LIMIT 1) as label,
+                          SUM(td.duration_ms) as total_ms
+                   FROM musiclibrary m
+                   JOIN track_durations td ON td.artist = m.artist AND td.track = m.track
+                   WHERE td.duration_ms IS NOT NULL
+                   GROUP BY m.artist_key, m.track_key ORDER BY total_ms DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+
+    if not rows:
+        return {"labels": [], "values": [], "hover": []}
+
+    labels = [row[0] for row in rows]
+    ms_vals = [row[1] for row in rows]
+    hours = [round(ms / 3_600_000, 2) for ms in ms_vals]
+    hover = [
+        f"{int(ms // 3_600_000)}h {int((ms % 3_600_000) // 60_000)}m"
+        for ms in ms_vals
+    ]
+    return {"labels": labels, "values": hours, "hover": hover}
+
+
 @app.get("/charts/accumulated-listens")
 async def accumulated_listens_chart(
     item_type: str = "artists", limit: int = 50, align: bool = False
@@ -4362,9 +4599,9 @@ async def time_spent_chart(item_type: str = "artists", limit: int = 50):
         plot_bgcolor="#161b22",
         font=dict(color="#f0f6fc"),
         height=max(400, len(labels) * 22 + 80),
-        margin=dict(t=10, l=20, r=20, b=40),
+        margin=dict(t=10, r=20, b=40),
         xaxis=dict(gridcolor="#30363d", color="#f0f6fc", title="Hours"),
-        yaxis=dict(gridcolor="#30363d", color="#f0f6fc"),
+        yaxis=dict(gridcolor="#30363d", color="#f0f6fc", automargin=True),
     )
     return fig.to_dict()
 

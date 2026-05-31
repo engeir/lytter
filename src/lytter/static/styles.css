@@ -489,3 +489,23 @@ a:hover {
     background: linear-gradient(transparent, var(--bg-secondary));
     pointer-events: none;
 }
+
+/* ===== Responsive Chart Heights ===== */
+.chart-tall,
+.chart-medium {
+    position: relative;
+}
+
+.chart-tall canvas,
+.chart-medium canvas {
+    display: block;
+}
+
+.chart-tall   { height: 500px; }
+.chart-medium { height: 450px; }
+
+@media (max-width: 767px) {
+    .chart-tall   { height: 400px; }
+    .chart-medium { height: 360px; }
+}
+

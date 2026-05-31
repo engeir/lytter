@@ -302,18 +302,21 @@
       .then(d => { accumCache[key] = d; return d; });
   }
 
-  function renderAccum(data) {
+  function renderAccum(data, align) {
     if (accumChart) { accumChart.destroy(); accumChart = null; }
 
-    const isAligned = data.aligned;
+    // Use the requested align mode (JS state), not data.aligned — guards
+    // against server/cache mismatch sending wrong format
+    const isAligned = !!align;
     const datasets = data.datasets.map((ds, i) => ({
       label: ds.label,
       data: ds.data,
       borderColor: PALETTE[i % PALETTE.length],
-      backgroundColor: 'transparent',
+      backgroundColor: PALETTE[i % PALETTE.length] + '22',  // faint fill for legend
       borderWidth: 2,
       pointRadius: 0,
       tension: 0.1,
+      fill: false,
     }));
 
     const xScale = isAligned
@@ -332,7 +335,6 @@
               const lbl = this.getLabelForValue(val);
               if (!lbl || typeof lbl !== 'string') return lbl;
               const [year, month] = lbl.split('-');
-              // Show full year for Jan, compact "'YY-MM" otherwise
               return month === '01' ? year : `'${year.slice(2)}-${month}`;
             },
           },
@@ -346,11 +348,18 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          layout: { padding: { bottom: 20 } },
           interaction: { mode: 'nearest', intersect: false },
           plugins: {
             legend: {
               position: 'bottom',
-              labels: { color: TEXT, boxWidth: 12, padding: 10 },
+              labels: {
+                color: TEXT,
+                padding: 10,
+                usePointStyle: true,
+                pointStyle: 'line',
+                pointStyleWidth: 16,
+              },
             },
             tooltip: baseTip,
           },
@@ -360,7 +369,6 @@
               ...baseScale,
               type: accumLog ? 'logarithmic' : 'linear',
               beginAtZero: !accumLog,
-              title: { display: true, text: 'Cumulative plays', color: TEXT },
             },
           },
         },
@@ -370,7 +378,7 @@
 
   function loadAccum(type, align) {
     fetchAccum(type, align)
-      .then(renderAccum)
+      .then(data => renderAccum(data, align))
       .catch(() => {
         const el = document.getElementById('accumulated-chart').parentElement;
         el.innerHTML = '<p class="text-muted p-3">Error loading chart</p>';

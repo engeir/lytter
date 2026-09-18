@@ -123,6 +123,8 @@ uv run lytter-duration
 uv run lytter-duration --retry-failed
 # Re-fetch durations for the entire library (e.g. after adding a new source)
 uv run lytter-duration --force
+# Remove likely duplicate song scrobbles
+uv run lytter-deduplicate
 ```
 
 **Or as modules:**

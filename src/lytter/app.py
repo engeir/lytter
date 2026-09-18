@@ -75,6 +75,9 @@ CONSECUTIVE_SCROBBLES_THRESHOLD = 50
 # Minimum valid scrobble timestamp: 2000-01-01 00:00:00 UTC
 # Last.fm launched in 2002; anything before 2000 is a corrupt epoch artifact.
 MINIMUM_VALID_TIMESTAMP = 946684800
+# Time window in seconds for near-duplicate scrobble detection
+# Scrobbles of the same artist+album+track within this window are considered duplicates
+DUPLICATE_WINDOW_SECONDS = 60
 MUSICBRAINZ_USER_AGENT = "lytter/1.0 (https://github.com/engeir/lytter)"
 MUSICBRAINZ_SEARCH_URL = "https://musicbrainz.org/ws/2/recording/"
 DEEZER_SEARCH_URL = "https://api.deezer.com/search"
@@ -894,6 +897,45 @@ class GetScrobbles:
         self.pause_duration = 0.2
         self.method = "recenttracks"
 
+    def _is_near_duplicate(
+        self,
+        conn: sqlite3.Connection,
+        artist_key: str,
+        album_key: str,
+        track_key: str,
+        timestamp: int,
+    ) -> bool:
+        """Check if a scrobble with the same artist+album+track exists within the duplicate window.
+
+        Parameters
+        ----------
+        conn : sqlite3.Connection
+            Open database connection.
+        artist_key : str
+            Normalized artist key.
+        album_key : str
+            Normalized album key.
+        track_key : str
+            Normalized track key.
+        timestamp : int
+            Unix timestamp of the scrobble.
+
+        Returns
+        -------
+        bool
+            True if a near-duplicate exists, False otherwise.
+        """
+        window_start = timestamp - DUPLICATE_WINDOW_SECONDS
+        window_end = timestamp + DUPLICATE_WINDOW_SECONDS
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT 1 FROM musiclibrary
+               WHERE artist_key = ? AND album_key = ? AND track_key = ?
+               AND timestamp BETWEEN ? AND ?""",
+            (artist_key, album_key, track_key, window_start, window_end),
+        )
+        return cursor.fetchone() is not None
+
     def save(self) -> None:
         """Save new scrobbles (incremental update)."""
         self.get_scrobbles()
@@ -1020,21 +1062,33 @@ class GetScrobbles:
                             return new_scrobbles_count
                         continue
 
+                    # Extract scrobble data
+                    artist_raw = scrobble["artist"]["#text"]
+                    album_raw = scrobble["album"]["#text"]
+                    track_raw = scrobble["name"]
+                    artist_key = normalize_name(artist_raw, "artist")
+                    album_key = normalize_name(album_raw or "", "album")
+                    track_key = normalize_name(track_raw, "track")
+
+                    # Check for near-duplicate scrobbles (same artist+album+track within time window)
+                    if self._is_near_duplicate(
+                        conn, artist_key, album_key, track_key, scrobble_timestamp
+                    ):
+                        consecutive_old_scrobbles += 1
+                        continue
+
                     # Reset consecutive counter when we find a truly new scrobble
                     consecutive_old_scrobbles = 0
 
                     # Insert new scrobble
                     try:
-                        artist_raw = scrobble["artist"]["#text"]
-                        album_raw = scrobble["album"]["#text"]
-                        track_raw = scrobble["name"]
                         cursor.execute(
                             """
-                            INSERT INTO musiclibrary
-                            (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp,
-                             artist_key, album_key, track_key)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
+                             INSERT INTO musiclibrary
+                             (artist, artist_mbid, album, album_mbid, track, track_mbid, timestamp,
+                              artist_key, album_key, track_key)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         """,
                             (
                                 artist_raw,
                                 scrobble["artist"]["mbid"],
@@ -1043,9 +1097,9 @@ class GetScrobbles:
                                 track_raw,
                                 scrobble["mbid"],
                                 scrobble_timestamp,
-                                normalize_name(artist_raw, "artist"),
-                                normalize_name(album_raw, "album"),
-                                normalize_name(track_raw, "track"),
+                                artist_key,
+                                album_key,
+                                track_key,
                             ),
                         )
                         conn.commit()

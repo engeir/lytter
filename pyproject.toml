@@ -34,6 +34,7 @@ packages = ["src/lytter"]
 lytter = "lytter.app:main"
 lytter-background = "lytter.background_updater:main"
 lytter-cron = "lytter.cron_updater:main"
+lytter-deduplicate = "lytter.deduplicate_scrobbles:main"
 lytter-duration = "lytter.duration_updater:main"
 lytter-gaps = "lytter.gap_checker:main"
 lytter-meta = "lytter.meta_updater:main"

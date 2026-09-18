@@ -43,7 +43,7 @@ docker run -d \
   ghcr.io/engeir/lytter:latest
 
 # Or specific version
-docker pull ghcr.io/engeir/lytter:2026.8.1
+docker pull ghcr.io/engeir/lytter:2026.9.1
 ```
 
 Or use docker compose:

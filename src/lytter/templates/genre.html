@@ -42,7 +42,7 @@
             {% set max_w = top_artists[0].weighted %}
             {% for item in top_artists %}
               {{ bar_chart_item(label=item.artist ~ ' (' ~ item.plays ~ ')', value=item.weighted, max_value=max_w,
-                            url='/artist/' + (item.artist|urlencode) , index=loop.index) }}
+                url='/artist/' + (item.artist|urlencode) , index=loop.index) }}
             {% endfor %}
           {% else %}
             <p class="text-muted">No data</p>
@@ -59,10 +59,10 @@
             {% set max_p = top_tracks[0].plays %}
             {% for item in top_tracks %}
               {{ yearly_top_item(index=loop.index, primary_text=item.track,
-                            secondary_text=item.artist, plays=item.plays,
-                            primary_url='/song/' + (item.artist|urlencode) + '/' + (item.track|urlencode),
-              secondary_url='/artist/' + (item.artist|urlencode),
-              bar_pct=((item.plays / max_p * 100)|round(1))) }}
+                secondary_text=item.artist, plays=item.plays,
+                primary_url='/song/' + (item.artist|urlencode) + '/' + (item.track|urlencode),
+                secondary_url='/artist/' + (item.artist|urlencode),
+                bar_pct=((item.plays / max_p * 100)|round(1))) }}
             {% endfor %}
           {% else %}
             <p class="text-muted">No data</p>
@@ -79,10 +79,10 @@
             {% set max_p = top_albums[0].plays %}
             {% for item in top_albums %}
               {{ yearly_top_item(index=loop.index, primary_text=item.album,
-                            secondary_text=item.artist, plays=item.plays,
-                            primary_url='/album/' + (item.artist|urlencode) + '/' + (item.album|urlencode),
-              secondary_url='/artist/' + (item.artist|urlencode),
-              bar_pct=((item.plays / max_p * 100)|round(1))) }}
+                secondary_text=item.artist, plays=item.plays,
+                primary_url='/album/' + (item.artist|urlencode) + '/' + (item.album|urlencode),
+                secondary_url='/artist/' + (item.artist|urlencode),
+                bar_pct=((item.plays / max_p * 100)|round(1))) }}
             {% endfor %}
           {% else %}
             <p class="text-muted">No data</p>

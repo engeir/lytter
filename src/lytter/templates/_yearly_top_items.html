@@ -4,21 +4,21 @@
   {% set max_plays = items[0].plays %}
   {% for item in items %}
     {% set bar_pct = ((item.plays / max_plays * 100) | round(1)) if max_plays > 0 else 0 %}
-    {% if item_type == 'songs' %}
+    {% if item_type == "songs" %}
       {{ yearly_top_item(index=loop.index, primary_text=item.track,
-            secondary_text=item.artist, plays=item.plays,
-            primary_url='/song/' + (item.artist|urlencode) + '/' + (item.track|urlencode),
-      secondary_url='/artist/' + (item.artist|urlencode),
-      bar_pct=bar_pct) }}
-    {% elif item_type == 'albums' %}
+        secondary_text=item.artist, plays=item.plays,
+        primary_url='/song/' + (item.artist|urlencode) + '/' + (item.track|urlencode),
+        secondary_url='/artist/' + (item.artist|urlencode),
+        bar_pct=bar_pct) }}
+    {% elif item_type == "albums" %}
       {{ yearly_top_item(index=loop.index, primary_text=item.album, secondary_text=item.artist, plays=item.plays,
-            primary_url='/album/' + (item.artist|urlencode) + '/' + (item.album|urlencode),
-      secondary_url='/artist/' + (item.artist|urlencode),
-      bar_pct=bar_pct) }}
-    {% elif item_type == 'artists' %}
+        primary_url='/album/' + (item.artist|urlencode) + '/' + (item.album|urlencode),
+        secondary_url='/artist/' + (item.artist|urlencode),
+        bar_pct=bar_pct) }}
+    {% elif item_type == "artists" %}
       {{ yearly_top_item(index=loop.index, primary_text=item.artist, secondary_text=None,
-            plays=item.plays, primary_url='/artist/' + (item.artist|urlencode) ,
-      secondary_url=None, bar_pct=bar_pct) }}
+        plays=item.plays, primary_url='/artist/' + (item.artist|urlencode) ,
+        secondary_url=None, bar_pct=bar_pct) }}
     {% endif %}
   {% endfor %}
 {% else %}

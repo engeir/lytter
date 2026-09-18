@@ -5,10 +5,10 @@
   {% set max_plays = songs[0].plays if songs else 1 %}
   {% for song in songs %}
     {{ bar_chart_item(label=song.track ~ ' · ' ~ song.artist,
-        value=song.plays,
-        max_value=max_plays,
-        url='/song/' + (song.artist|urlencode) + '/' + (song.track|urlencode),
-    index=loop.index
+      value=song.plays,
+      max_value=max_plays,
+      url='/song/' + (song.artist|urlencode) + '/' + (song.track|urlencode),
+      index=loop.index
     ) }}
   {% endfor %}
 {% else %}

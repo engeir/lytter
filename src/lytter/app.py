@@ -29,6 +29,7 @@ try:
     import plotly.express as px
     import plotly.graph_objects as go
     from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+    from fastapi.middleware.gzip import GZipMiddleware
     from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
     from fastapi.templating import Jinja2Templates
@@ -68,6 +69,8 @@ templates = Jinja2Templates(directory=str(_PKG_DIR / "templates"))
 # Add custom Jinja2 filter for URL encoding
 templates.env.filters["urlencode"] = lambda s: quote(str(s), safe="")
 
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="static")
 
 # Constants
@@ -87,8 +90,11 @@ DURATION_RETRY_DAYS = 30
 LYRICS_RETRY_DAYS = 90
 GENRES_RETRY_DAYS = 90
 METADATA_RETRY_DAYS = 30
+# pylast builds a new HTTP client for each call, so one call costs about a second
+NOW_PLAYING_CACHE_SECONDS = 25
 
 _spotify_token: dict[str, object] = {}  # keys: access_token, expires_at
+_now_playing_cache: dict[str, object] = {}  # keys: track, expires_at
 
 _VARIANT_RE = re.compile(
     r"\s*[-–(]\s*"
@@ -1257,13 +1263,22 @@ class CurrentStats:
         return fig_dict
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    """Display main dashboard page."""
+def get_now_playing() -> dict[str, str] | None:
+    """Return the track that plays now, cached for a few seconds.
+
+    Returns
+    -------
+    dict[str, str] | None
+        Artist, title and album of the current track, or None.
+    """
+    cached = _now_playing_cache.get("track")
+    expires_at = _now_playing_cache.get("expires_at", 0)
+    if isinstance(expires_at, float) and _time.time() < expires_at:
+        return cached if isinstance(cached, dict) else None
+
     current_track = None
     try:
-        user = network.get_user(USER_NAME)
-        now_playing = user.get_now_playing()
+        now_playing = network.get_user(USER_NAME).get_now_playing()
         if now_playing:
             current_track = {
                 "artist": str(now_playing.artist),
@@ -1274,8 +1289,17 @@ async def index(request: Request):
             }
     except Exception:
         pass
+
+    _now_playing_cache["track"] = current_track
+    _now_playing_cache["expires_at"] = _time.time() + NOW_PLAYING_CACHE_SECONDS
+    return current_track
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    """Display main dashboard page."""
     return templates.TemplateResponse(
-        request, "index.html", {"current_track": current_track}
+        request, "index.html", {"current_track": get_now_playing()}
     )
 
 

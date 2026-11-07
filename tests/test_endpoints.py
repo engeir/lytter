@@ -38,3 +38,53 @@ def test_timeline_range_all_returns_json(client):
     data = response.json()
     assert "data" in data
     assert "layout" in data
+
+
+class _FakeTrack:
+    artist = "Radiohead"
+    title = "Paranoid Android"
+
+    def get_album(self):
+        """Return no album, like a track scrobbled without one."""
+        return None
+
+
+class _FakeNetwork:
+    """Minimal pylast network that counts now-playing calls."""
+
+    def __init__(self, calls: list[int]) -> None:
+        self.calls = calls
+
+    def get_user(self, _name):
+        """Return a user whose now-playing track counts each call."""
+        calls = self.calls
+
+        class _User:
+            def get_now_playing(self):
+                calls.append(1)
+                return _FakeTrack()
+
+        return _User()
+
+
+def test_index_caches_now_playing(client, monkeypatch):
+    """A second page load within the cache window does not call Last.fm."""
+    calls: list[int] = []
+    monkeypatch.setattr(app_module, "network", _FakeNetwork(calls))
+    app_module._now_playing_cache.clear()
+
+    first = client.get("/")
+    second = client.get("/")
+
+    assert first.status_code == 200  # noqa: PLR2004
+    assert "Paranoid Android" in first.text
+    assert "Paranoid Android" in second.text
+    assert len(calls) == 1
+
+
+def test_responses_are_gzipped(client):
+    """A page above the minimum size returns the gzip content encoding."""
+    app_module._now_playing_cache.clear()
+    response = client.get("/yearly", headers={"Accept-Encoding": "gzip"})
+    assert response.status_code == 200  # noqa: PLR2004
+    assert response.headers.get("content-encoding") == "gzip"

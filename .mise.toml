@@ -1,6 +1,7 @@
 [tools]
 "cargo:git-cliff" = "latest"
 fnox = "latest"
+hk = { version = "latest", workflow = "release.yml" }
 pitchfork = { version = "latest", workflow = "release.yml@refs/heads/main" }
 uv = "latest"
 

@@ -102,6 +102,7 @@ _FEAT_PAREN_RE = re.compile(
     re.IGNORECASE,
 )
 _FEAT_BARE_RE = re.compile(r"\b(?:feat|ft|featuring)\.?(?=\s|$)", re.IGNORECASE)
+_LISTENING_UNIT_RE = re.compile(r"\s*[\(\[]\s*on\s+[^)\]]+[\)\]]\s*$", re.IGNORECASE)
 
 
 def normalize_text(text: str) -> str:
@@ -167,6 +168,19 @@ def normalize_name(s: str, field: str = "artist") -> str:
     # 6. Ampersand (with surrounding spaces only)
     s = s.replace(" & ", " and ")
     return s
+
+
+def clean_artist_name(s: str) -> str:
+    """Strip trailing `(on <listening unit>)` scrobbler artefact.
+
+    Only a final bracketed group starting with 'on' plus a unit name is
+    removed, and never when it would leave the artist name empty.
+    """
+    match = _LISTENING_UNIT_RE.search(s)
+    if not match:
+        return s
+    cleaned = " ".join(s[: match.start()].split())
+    return cleaned or s
 
 
 def backfill_keys(conn: sqlite3.Connection) -> None:

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import requests
 from dotenv import load_dotenv
 
-from lytter.app import DB_NAME, normalize_name
+from lytter.app import DB_NAME, clean_artist_name, normalize_name
 
 load_dotenv()
 
@@ -145,6 +145,7 @@ def fill_gaps(gaps, dry_run=True):
                 )
                 if not cursor.fetchone():
                     if not dry_run:
+                        artist = clean_artist_name(scrobble["artist"])
                         try:
                             cursor.execute(
                                 """
@@ -154,14 +155,14 @@ def fill_gaps(gaps, dry_run=True):
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                                 (
-                                    scrobble["artist"],
+                                    artist,
                                     scrobble["artist_mbid"],
                                     scrobble["album"],
                                     scrobble["album_mbid"],
                                     scrobble["track"],
                                     scrobble["track_mbid"],
                                     scrobble["timestamp"],
-                                    normalize_name(scrobble["artist"], "artist"),
+                                    normalize_name(artist, "artist"),
                                     normalize_name(scrobble["album"] or "", "album"),
                                     normalize_name(scrobble["track"], "track"),
                                 ),

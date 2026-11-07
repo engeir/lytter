@@ -125,6 +125,8 @@ uv run lytter-duration --retry-failed
 uv run lytter-duration --force
 # Remove likely duplicate song scrobbles
 uv run lytter-deduplicate
+# Rename artists that carry a scrobbler unit suffix, e.g. "(on Bad)"
+uv run lytter-fix-artists
 ```
 
 **Or as modules:**

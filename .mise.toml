@@ -1,12 +1,14 @@
 [tools]
 "cargo:git-cliff" = "latest"
+fnox = "latest"
+pitchfork = { version = "latest", workflow = "release.yml@refs/heads/main" }
 uv = "latest"
 
 # Development tasks
 [tasks.run]
 alias = "r"
 description = "Run the FastAPI app locally"
-run = "uv run uvicorn lytter.app:app --reload --host 0.0.0.0 --port 8000"
+run = "uv run uvicorn lytter.app:app --reload --host 0.0.0.0 --port 8001"
 
 [tasks.sync]
 alias = "i"

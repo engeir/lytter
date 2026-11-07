@@ -1077,7 +1077,7 @@ class GetScrobbles:
                         continue
 
                     # Extract scrobble data
-                    artist_raw = scrobble["artist"]["#text"]
+                    artist_raw = clean_artist_name(scrobble["artist"]["#text"])
                     album_raw = scrobble["album"]["#text"]
                     track_raw = scrobble["name"]
                     artist_key = normalize_name(artist_raw, "artist")
